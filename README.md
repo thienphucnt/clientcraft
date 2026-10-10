@@ -1,6 +1,6 @@
-# ClientCraft — Privacy-First Web Utility Suite & Growth Engine
+# ClientCraft — Privacy-First Web Utility Suite & DevOps Growth Engine
 
-> **Ultra-lightweight, high-performance web utility hub engineered for 100% client-side in-memory execution, static Vercel Edge hosting, offline PWA resilience, programmatic SEO metadata, and passive monetization.**
+> **Ultra-lightweight, high-performance web utility hub engineered for 100% client-side in-memory execution, static Vercel Edge hosting, offline PWA resilience, programmatic SEO metadata, error boundaries, and passive monetization.**
 
 ---
 
@@ -56,6 +56,18 @@ Every utility in ClientCraft operates strictly in the client's browser V8 engine
 
 ---
 
+## 🛡️ Error Hardening & Resilience
+
+- **Custom React Error Boundaries (`components/ui/ErrorBoundary.tsx`)**:
+  - Isolated component boundaries wrapping each tool so runtime crashes never break the entire application.
+  - **Out-of-Memory (OOM) Detection**: Catches browser memory allocation limits on oversized image canvas buffers and guides users to reduce target dimensions or quality without a page reload.
+  - **Graceful Recovery**: One-click "Recover & Reset Tool" button that flushes local state and re-renders cleanly.
+- **Chunk Loading Retry Handler (`components/ChunkRetryHandler.tsx`)**:
+  - Global listener catching `ChunkLoadError` or dynamic import failures during transient network drops.
+  - Performs automated exponential-backoff retries and refreshes stale chunk caches on reconnect.
+
+---
+
 ## 📱 Progressive Web App (PWA) & Offline Resilience
 
 - **Service Worker (`public/sw.js`)**:
@@ -95,60 +107,36 @@ Every utility in ClientCraft operates strictly in the client's browser V8 engine
 
 ---
 
-## 📁 Repository Structure
+## 📊 Privacy-Preserving Cookieless Analytics
 
-```
-├── app/
-│   ├── layout.tsx         # Root layout, theme initialization script, PWA metadata
-│   ├── page.tsx           # Hub dashboard with hero banner & active tool viewports
-│   ├── globals.css        # Tailwind CSS v4 design tokens and custom scrollbars
-│   ├── sitemap.ts         # Programmatic sitemap generator (sitemap.xml)
-│   ├── robots.ts          # Programmatic crawler instructions (robots.txt)
-│   └── tools/             # Programmatic SEO landing pages
-│       ├── image-compressor/page.tsx
-│       ├── json-to-typescript/page.tsx
-│       └── text-privacy-scrubber/page.tsx
-├── components/
-│   ├── monetization/
-│   │   ├── EthicalAdCard.tsx  # Cookieless ad placement with blocker fallback
-│   │   └── ProModal.tsx       # Lemon Squeezy, Crypto & HMAC license modal
-│   ├── tools/
-│   │   ├── ImageCompressor.tsx # Client-side image & SVG compressor
-│   │   ├── JsonConverter.tsx   # Dual-pane JSON to TS/Zod converter
-│   │   └── PrivacyScrubber.tsx # AI prompt sanitizer & PII scrubber
-│   ├── ui/
-│   │   ├── Header.tsx         # Navigation, Pro Supporter pill, theme toggle
-│   │   ├── Footer.tsx         # Privacy guarantees & system specs
-│   │   └── ThemeToggle.tsx    # Light / Dark / System theme switcher
-│   └── PwaRegister.tsx        # Service Worker registration & offline toast alert
-├── lib/
-│   ├── monetization/
-│   │   └── license-verifier.ts # Web Crypto HMAC-SHA256 signature verifier
-│   ├── theme-provider.tsx     # Theme context and localStorage persistence
-│   └── tools/
-│       ├── image-compressor.ts # Canvas & SVG processing engine
-│       ├── json-to-ts-zod.ts   # AST type generator engine
-│       └── privacy-scrubber.ts # Regex detection & tokenizing engine
-├── public/
-│   ├── icons/             # 192x192 and 512x512 PWA vector icons
-│   ├── manifest.json      # PWA Web App Manifest
-│   └── sw.js              # Service Worker for offline asset caching
-├── next.config.ts         # Next.js 15 static export configuration ('output: export')
-├── vercel.json            # Vercel deployment with aggressive immutable caching
-└── tsconfig.json          # Strict TypeScript configuration
-```
+- **Cloudflare Web Analytics (`components/analytics/PrivacyAnalytics.tsx`)**: Optional cookieless beacon activated via `NEXT_PUBLIC_CF_ANALYTICS_TOKEN`.
+- **In-Memory Event Bus (`lib/analytics.ts`)**: Dispatches non-identifying telemetry (`image_compressed`, `json_converted`, `privacy_scrubbed`, `pro_unlocked`) with zero cookies, zero device fingerprinting, and zero personal data.
+
+---
+
+## ⚙️ CI/CD & Automated Verification
+
+- **GitHub Actions Workflow (`.github/workflows/ci.yml`)**:
+  - Automated ESLint analysis on every push/PR.
+  - Strict TypeScript compiler type validation (`tsc --noEmit`).
+  - Next.js static production build execution (`npm run build`).
+  - Comprehensive static artifact assertion verifying generated HTML, sitemap, and robots.
+- **Lighthouse CI (`.lighthouserc.json`)**:
+  - Automated audit asserting **95+ scores** across:
+    - **Performance**: ≥ 0.95
+    - **Accessibility**: ≥ 0.95
+    - **Best Practices**: ≥ 0.95
+    - **SEO**: ≥ 0.95
 
 ---
 
 ## ⚡ Deployment & Build
 
-### Development
 ```bash
+# Development
 npm run dev
-```
 
-### Static Production Build
-```bash
+# Static Production Build
 npm run build
 ```
 Pre-renders all static pages, tool landing pages, sitemap, and robots into `out/` with 100% static HTML.

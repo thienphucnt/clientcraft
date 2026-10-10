@@ -21,6 +21,7 @@ import {
   DEMO_PRECOMPUTED_LICENSES,
   StoredLicenseState,
 } from "@/lib/monetization/license-verifier";
+import { trackPrivacyEvent } from "@/lib/analytics";
 
 interface ProModalProps {
   isOpen: boolean;
@@ -50,6 +51,7 @@ export function ProModal({ isOpen, onClose, onLicenseChanged }: ProModalProps) {
     if (isOpen) {
       getStoredLicense().then(setLicenseStatus);
       setValidationError(null);
+      trackPrivacyEvent("pro_modal_viewed");
     }
   }, [isOpen]);
 
@@ -61,6 +63,7 @@ export function ProModal({ isOpen, onClose, onLicenseChanged }: ProModalProps) {
     try {
       const res = await saveLicense(licenseInput.trim());
       if (res.valid) {
+        trackPrivacyEvent("pro_unlocked", { tier: res.tier });
         const updated = await getStoredLicense();
         setLicenseStatus(updated);
         setLicenseInput("");

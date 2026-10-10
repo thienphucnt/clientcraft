@@ -4,6 +4,7 @@ import { Header } from "@/components/ui/Header";
 import { Footer } from "@/components/ui/Footer";
 import { JsonConverter } from "@/components/tools/JsonConverter";
 import { EthicalAdCard } from "@/components/monetization/EthicalAdCard";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { Code2, HelpCircle, ChevronRight, CheckCircle2, FileCode, Check } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -111,9 +112,11 @@ export default function JsonToTypeScriptPage() {
           </p>
         </div>
 
-        {/* Interactive Tool Component */}
+        {/* Interactive Tool Component wrapped with ErrorBoundary */}
         <section className="bg-white/90 dark:bg-slate-900/70 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs backdrop-blur-xs">
-          <JsonConverter />
+          <ErrorBoundary toolName="JSON to TypeScript & Zod">
+            <JsonConverter />
+          </ErrorBoundary>
         </section>
 
         {/* Ethical Ad & Sponsor Placement */}

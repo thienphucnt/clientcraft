@@ -4,6 +4,7 @@ import { Header } from "@/components/ui/Header";
 import { Footer } from "@/components/ui/Footer";
 import { ImageCompressor } from "@/components/tools/ImageCompressor";
 import { EthicalAdCard } from "@/components/monetization/EthicalAdCard";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { Sparkles, Shield, Cpu, HelpCircle, ChevronRight, CheckCircle2 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -111,9 +112,11 @@ export default function ImageCompressorPage() {
           </p>
         </div>
 
-        {/* Interactive Tool Component */}
+        {/* Interactive Tool Component wrapped with ErrorBoundary */}
         <section className="bg-white/90 dark:bg-slate-900/70 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs backdrop-blur-xs">
-          <ImageCompressor />
+          <ErrorBoundary toolName="Image & SVG Compressor">
+            <ImageCompressor />
+          </ErrorBoundary>
         </section>
 
         {/* Ethical Ad & Sponsor Placement */}

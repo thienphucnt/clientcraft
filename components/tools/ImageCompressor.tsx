@@ -18,6 +18,7 @@ import {
   CompressionOptions,
   CompressionResult,
 } from "@/lib/tools/image-compressor";
+import { trackPrivacyEvent } from "@/lib/analytics";
 
 export function ImageCompressor() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -44,6 +45,10 @@ export function ImageCompressor() {
           keepAspectRatio,
         });
         setResult(res);
+        trackPrivacyEvent("image_compressed", {
+          format: res.format,
+          savingsPercent: res.savingsPercent,
+        });
       } catch (err) {
         console.error("Compression error:", err);
       } finally {

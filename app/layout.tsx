@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme-provider";
+import { ChunkRetryHandler } from "@/components/ChunkRetryHandler";
+import { PrivacyAnalytics } from "@/components/analytics/PrivacyAnalytics";
 
 const geistSans = Geist({
   variable: "--font-font-sans",
@@ -63,6 +65,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-slate-50 dark:bg-[#090d16] text-slate-900 dark:text-slate-100 transition-colors`}
       >
+        <ChunkRetryHandler />
+        <PrivacyAnalytics />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

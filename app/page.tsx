@@ -9,6 +9,7 @@ import { JsonConverter } from "@/components/tools/JsonConverter";
 import { PrivacyScrubber } from "@/components/tools/PrivacyScrubber";
 import { EthicalAdCard } from "@/components/monetization/EthicalAdCard";
 import { ProModal } from "@/components/monetization/ProModal";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import {
   Sparkles,
   Code2,
@@ -182,11 +183,25 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Active Tool Viewport */}
+        {/* Active Tool Viewport Wrapped with Error Boundaries */}
         <section className="bg-white/90 dark:bg-slate-900/70 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs backdrop-blur-xs">
-          {activeTab === "image" && <ImageCompressor />}
-          {activeTab === "json" && <JsonConverter />}
-          {activeTab === "scrubber" && <PrivacyScrubber />}
+          {activeTab === "image" && (
+            <ErrorBoundary toolName="Image & SVG Compressor">
+              <ImageCompressor />
+            </ErrorBoundary>
+          )}
+
+          {activeTab === "json" && (
+            <ErrorBoundary toolName="JSON to TypeScript & Zod">
+              <JsonConverter />
+            </ErrorBoundary>
+          )}
+
+          {activeTab === "scrubber" && (
+            <ErrorBoundary toolName="AI Prompt Privacy Scrubber">
+              <PrivacyScrubber />
+            </ErrorBoundary>
+          )}
         </section>
 
         {/* Ethical Ad Placement */}

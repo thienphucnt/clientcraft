@@ -20,6 +20,7 @@ import {
   scrubPrivacyText,
   RedactionStyle,
 } from "@/lib/tools/privacy-scrubber";
+import { trackPrivacyEvent } from "@/lib/analytics";
 
 const SAMPLE_PROMPTS = {
   apiDebug: `Error occurred during production sync in AWS Lambda handler.
@@ -87,6 +88,7 @@ export function PrivacyScrubber() {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(result.sanitizedText);
+      trackPrivacyEvent("privacy_scrubbed", { entitiesCount: result.totalRedacted });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -95,6 +97,7 @@ export function PrivacyScrubber() {
   };
 
   const handleDownload = () => {
+    trackPrivacyEvent("privacy_scrubbed", { entitiesCount: result.totalRedacted });
     const blob = new Blob([result.sanitizedText], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
