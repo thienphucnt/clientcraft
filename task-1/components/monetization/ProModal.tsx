@@ -233,9 +233,23 @@ export function ProModal({ isOpen, onClose, onLicenseChanged }: ProModalProps) {
                     </div>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-400 text-center">
-                  Quét bằng ứng dụng của bất kỳ ngân hàng VN nào hoặc MoMo.
-                </p>
+                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 space-y-2">
+                  <button
+                    onClick={async () => {
+                      await saveLicense(DEMO_PRECOMPUTED_LICENSES.proSupporter);
+                      const updated = await getStoredLicense();
+                      setLicenseStatus(updated);
+                      onLicenseChanged?.();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-xs transition-colors"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Đã chuyển khoản? Kích hoạt ngay</span>
+                  </button>
+                  <p className="text-[10px] text-slate-400 text-center">
+                    Mở khóa tức thì theo cơ chế tin cậy (Honor System) sau khi quét mã Napas 24/7.
+                  </p>
+                </div>
               </div>
 
               {/* Option 2: Buy Me a Coffee (For Foreigners & International Supporters) */}
