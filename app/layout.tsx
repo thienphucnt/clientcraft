@@ -15,14 +15,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 export const metadata: Metadata = {
   title: "ClientCraft — High-Performance Privacy-First Web Utility Hub",
   description:
     "100% client-side in-memory tools: SVG/Raster Image Compressor, JSON to TypeScript/Zod Converter, and AI Prompt Privacy Scrubber. Zero telemetry, offline PWA ready.",
-  manifest: "/manifest.json",
+  manifest: `${basePath}/manifest.json`,
   icons: {
-    icon: "/icons/icon-192.svg",
-    apple: "/icons/icon-192.svg",
+    icon: `${basePath}/icons/icon-192.svg`,
+    apple: `${basePath}/icons/icon-192.svg`,
   },
   keywords: [
     "client-side",

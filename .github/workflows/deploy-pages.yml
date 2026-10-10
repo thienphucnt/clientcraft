@@ -35,6 +35,9 @@ jobs:
 
       - name: Build static export
         run: npm run build
+        env:
+          NEXT_PUBLIC_BASE_PATH: /clientcraft
+          GITHUB_PAGES: 'true'
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -35,10 +35,11 @@ export function PwaRegister() {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Register service worker
+    // Register service worker with basePath support
     if ("serviceWorker" in navigator) {
+      const swPath = `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/sw.js`;
       navigator.serviceWorker
-        .register("/sw.js")
+        .register(swPath)
         .catch((err) => console.debug("PWA service worker registration skipped:", err));
     }
 

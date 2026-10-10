@@ -2,13 +2,13 @@
 const CACHE_NAME = "clientcraft-pwa-v2";
 
 const PRECACHE_ASSETS = [
-  "/",
-  "/tools/image-compressor",
-  "/tools/json-to-typescript",
-  "/tools/text-privacy-scrubber",
-  "/manifest.json",
-  "/icons/icon-192.svg",
-  "/icons/icon-512.svg",
+  "./",
+  "./tools/image-compressor/",
+  "./tools/json-to-typescript/",
+  "./tools/text-privacy-scrubber/",
+  "./manifest.json",
+  "./icons/icon-192.svg",
+  "./icons/icon-512.svg",
 ];
 
 // Precache core routes and shell assets on install
@@ -49,8 +49,8 @@ self.addEventListener("fetch", (event) => {
 
   // 1. Static hashed assets (JS chunks, CSS, web fonts, SVGs, images) -> Cache-First
   if (
-    url.pathname.startsWith("/_next/static/") ||
-    url.pathname.startsWith("/icons/") ||
+    url.pathname.includes("/_next/static/") ||
+    url.pathname.includes("/icons/") ||
     url.pathname.endsWith(".woff2") ||
     url.pathname.endsWith(".woff") ||
     url.pathname.endsWith(".svg") ||

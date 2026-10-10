@@ -1,169 +1,142 @@
-# DevStack Directory & ClientCraft Utility Suite
+# ClientCraft — Privacy-First Web Utility Suite & DevOps Growth Engine
 
-> **A blazing-fast, database-free directory and resource catalog engine powered by flat-file JSON and static site generation (SSG) for Vercel, paired with a 100% client-side privacy-first web utility suite.**
-
----
-
-## ⚡ Architecture: Flat-File Static Catalog Engine
-
-DevStack Directory is engineered from the ground up for zero-database overhead, sub-millisecond static response times, and zero server maintenance:
-
-- **Database-Free Flat-File Content**: Directory entries are stored as Git-versioned JSON files in `/content/listings/*.json`.
-- **Runtime & Build-Time Type Safety**: Validated strictly with Zod schemas (`lib/listings/schema.ts`) and TypeScript.
-- **Zero Server Dependencies**: Compiled statically via Next.js 15 App Router static export (`output: "export"` in `next.config.ts`), generating pure static HTML/CSS/JS in `out/`.
-- **Global Vercel Edge Delivery**: Instant static edge deployment with immutable caching (`max-age=31536000`) and security headers via `vercel.json`.
+> **Ultra-lightweight, high-performance web utility hub engineered for 100% client-side in-memory execution, static Vercel Edge hosting, offline PWA resilience, programmatic SEO metadata, error boundaries, and passive monetization.**
 
 ---
 
-## 📋 Flat-File Content Schema
+## 🔒 Architectural Philosophy: Zero Network Transmission
 
-Every directory listing entry stored in `/content/listings/*.json` adheres strictly to the following specification:
-
-```typescript
-export const ListingSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  slug: z.string(),
-  description: z.string(),
-  category: z.string(),
-  tags: z.array(z.string()),
-  url: z.string().url(),
-  affiliateUrl: z.string().url().nullable().optional(),
-  featuredUntil: z.string().nullable().optional(), // ISO 8601 date string
-  pricingModel: z.enum(["Free", "Freemium", "Open Source", "Paid", "Free Trial"]),
-  dateAdded: z.string(), // YYYY-MM-DD format
-  // Extended fields for rich feature breakdowns
-  verified: z.boolean().default(true),
-  features: z.array(z.string()).default([]),
-  pros: z.array(z.string()).default([]),
-  cons: z.array(z.string()).default([]),
-  targetAudience: z.string().optional(),
-  githubUrl: z.string().url().optional(),
-  stars: z.string().optional(),
-  license: z.string().optional(),
-});
-```
+Every utility in ClientCraft operates strictly in the client's browser V8 engine thread:
+- **0 Server Relays**: No API backends, no database logging, no external server calls.
+- **In-Memory Volatility**: Data loaded into Canvas, AST parsers, or regex scrubbers is stored strictly in memory and cleared on reload.
+- **Offline PWA**: Full Service Worker caching enables 100% offline functionality.
+- **Static Edge Export**: Pre-rendered static assets deployable globally to Vercel Edge with zero server runtimes.
 
 ---
 
-## 🔍 Directory Search & Filtering UI
+## 🛠️ Core Client-Side Tools
 
-### 1. Instant Client-Side Search Bar
-- Live query matching across `title`, `description`, `category`, `tags`, and `pricingModel`.
-- Instant search input with clear button and `/` keyboard shortcut trigger.
-- Zero server round-trips for search queries.
+### 1. SVG & Raster Image Compressor
+- **Route**: [`/tools/image-compressor`](https://clientcraft.dev/tools/image-compressor)
+- **Engine**: Browser-native Canvas API and `OffscreenCanvas` with bicubic interpolation.
+- **Formats**: PNG, JPEG, WebP, SVG vectors, GIF, BMP.
+- **Features**:
+  - Live Quality slider (5% – 100%) with presets (Max Compression, Balanced, High Quality).
+  - Max dimension limits (Original, 1080p, 720p, 800px) maintaining strict aspect ratio constraints.
+  - Non-destructive SVG minification (removes XML comments, editor namespaces, doctypes, collapses whitespace).
+  - Real-time before/after comparison with byte size reduction metrics and latency counter.
+  - Instant client-side download and Base64 Data URI clipboard copying.
 
-### 2. Category Pill Filters
-- Interactive category pills with item count badges:
-  - *All Categories*
-  - *AI & Machine Learning*
-  - *Database & Backend*
-  - *Developer Tools*
-  - *Cloud & Infrastructure*
-  - *Security & Auth*
-  - *Design & UI*
+### 2. Live JSON to TypeScript & Zod Schema Converter
+- **Route**: [`/tools/json-to-typescript`](https://clientcraft.dev/tools/json-to-typescript)
+- **Engine**: Client-side recursive AST type generator.
+- **Features**:
+  - Dual-pane live reactive code editor with real-time JSON syntax validation and error feedback.
+  - Generates strongly-typed TypeScript interfaces and complete `zod` validation schemas (`z.object({...})`).
+  - Supports ISO 8601 date detection (`z.string().datetime()`), optional properties (`?`), and type aliases.
+  - Customizable root interface naming.
+  - One-click copy for TypeScript, Zod, and instant `.ts` file export.
+  - Built-in sample payloads (User Profile, E-Commerce Order, Paginated API).
 
-### 3. Tag Filtering & Multi-Faceted Sorting
-- Interactive tag chip cloud (e.g., `#open-source`, `#postgres`, `#sqlite`, `#local-ai`, `#edge`, `#auth`).
-- Pricing model filter (All, Free, Freemium, Open Source, Paid, Free Trial).
-- Sort options: *Featured First*, *Newest Added*, *Alphabetical (A-Z)*.
-- 1-click filter reset with active filter indicators.
-
-### 4. Clean Listing Cards
-- Verification badges (`Verified`).
-- Featured sponsorship highlight with glowing accents when `featuredUntil` is active.
-- Color-coded pricing model badge.
-- Clickable tags to filter catalog.
-- Direct outbound links with `rel="noopener noreferrer nofollow"`.
-- Direct link to programmatic slug details (`/listing/[slug]`).
-
-### 5. Programmatic Slug Pages (`/listing/[slug]`)
-- Pre-rendered at build time with `generateStaticParams()` across all 20+ listings.
-- Rich hero layout with breadcrumbs and direct outbound CTA (`rel="noopener noreferrer nofollow"`).
-- Core architectural feature breakdown checklist.
-- Side-by-side advantages and trade-offs (Pros & Cons).
-- Technical specification matrix (Catalog ID, Category, Pricing, Verification, Target Audience).
-- Related alternatives engine: dynamically finds and scores 3 related tools in the same category or sharing tags.
-- Schema.org JSON-LD structured data (`SoftwareApplication`) for rich search engine snippets.
-
----
-
-## 📦 Sample Tech Data (20 Curated Entries)
-
-The catalog ships with 20 high-quality niche tech entries in `/content/listings/`:
-
-| # | Tool | Category | Pricing Model | Slug |
-|---|------|----------|---------------|------|
-| 1 | **Ollama** | AI & Machine Learning | Open Source | `ollama` |
-| 2 | **Supabase** | Database & Backend | Freemium | `supabase` |
-| 3 | **Turso** | Database & Backend | Freemium | `turso` |
-| 4 | **Resend** | Developer Tools | Freemium | `resend` |
-| 5 | **Coolify** | Cloud & Infrastructure | Open Source | `coolify` |
-| 6 | **PocketBase** | Database & Backend | Open Source | `pocketbase` |
-| 7 | **Biome** | Developer Tools | Open Source | `biome` |
-| 8 | **v0 by Vercel** | AI & Machine Learning | Freemium | `v0-dev` |
-| 9 | **shadcn/ui** | Design & UI | Open Source | `shadcn-ui` |
-| 10 | **Unkey** | Security & Auth | Freemium | `unkey` |
-| 11 | **Val Town** | Developer Tools | Freemium | `val-town` |
-| 12 | **Tinybird** | Cloud & Infrastructure | Freemium | `tinybird` |
-| 13 | **Plausible Analytics** | Cloud & Infrastructure | Free Trial | `plausible` |
-| 14 | **Convex** | Database & Backend | Freemium | `convex` |
-| 15 | **Trigger.dev** | Developer Tools | Freemium | `trigger-dev` |
-| 16 | **Upstash** | Cloud & Infrastructure | Freemium | `upstash` |
-| 17 | **authentik** | Security & Auth | Open Source | `authentik` |
-| 18 | **SVGL** | Design & UI | Free | `svgl` |
-| 19 | **Better Auth** | Security & Auth | Open Source | `better-auth` |
-| 20 | **Hugging Face Transformers** | AI & Machine Learning | Open Source | `transformers` |
+### 3. AI Prompt & PII Privacy Scrubber
+- **Route**: [`/tools/text-privacy-scrubber`](https://clientcraft.dev/tools/text-privacy-scrubber)
+- **Engine**: Client-side high-throughput regex redaction pipeline.
+- **Detected Entities**:
+  - API Keys & Secrets: OpenAI (`sk-...`), AWS (`AKIA...`), GitHub (`ghp_...`), Google (`AIza...`), Slack (`xox...`), JWT Bearer tokens, and generic secrets.
+  - Email addresses (RFC 5322 compliant).
+  - IPv4 and IPv6 addresses.
+  - International & US telephone numbers.
+  - Credit Card numbers & US Social Security Numbers.
+- **Redaction Styles**:
+  - **Tokenized Placeholder** (`[API_KEY_1]`, `[EMAIL_1]`): Retains entity continuity across prompts for external LLMs.
+  - **Generic Placeholder** (`[REDACTED_API_KEY]`, `[REDACTED_EMAIL]`).
+  - **Masked** (`sk-***1234`, `j***@corp.com`).
+  - **Erase Completely**.
+- Real-time Entity Inspector breakdown drawer and detection statistics.
 
 ---
 
-## 🛠️ In-Browser Utility Suite
+## 🛡️ Error Hardening & Resilience
 
-ClientCraft's 100% offline-ready utility suite remains integrated:
-- **Image & SVG Compressor** (`/tools/image-compressor`)
-- **JSON → TypeScript & Zod** (`/tools/json-to-typescript`)
-- **Prompt & Text Privacy Scrubber** (`/tools/text-privacy-scrubber`)
+- **Custom React Error Boundaries (`components/ui/ErrorBoundary.tsx`)**:
+  - Isolated component boundaries wrapping each tool so runtime crashes never break the entire application.
+  - **Out-of-Memory (OOM) Detection**: Catches browser memory allocation limits on oversized image canvas buffers and guides users to reduce target dimensions or quality without a page reload.
+  - **Graceful Recovery**: One-click "Recover & Reset Tool" button that flushes local state and re-renders cleanly.
+- **Chunk Loading Retry Handler (`components/ChunkRetryHandler.tsx`)**:
+  - Global listener catching `ChunkLoadError` or dynamic import failures during transient network drops.
+  - Performs automated exponential-backoff retries and refreshes stale chunk caches on reconnect.
 
 ---
 
-## 🚀 Build & Deployment Commands
+## 📱 Progressive Web App (PWA) & Offline Resilience
+
+- **Service Worker (`public/sw.js`)**:
+  - Caches all JS bundles, CSS stylesheets, web fonts (`.woff2`), icons, and static routes on initial load.
+  - Cache-first strategy for immutable assets; network-first with offline fallback for navigation.
+- **Web App Manifest (`public/manifest.json`)**: Configured with maskable vector icons (192px & 512px) and standalone display for native installation on desktop and mobile.
+- **Reactive Offline Indicator (`components/PwaRegister.tsx`)**: Real-time connection badge in header and floating toast notification informing users when operating in offline mode.
+
+---
+
+## 🌐 Programmatic SEO Architecture
+
+- **Dedicated Static Landing Pages**:
+  - `/tools/image-compressor`
+  - `/tools/json-to-typescript`
+  - `/tools/text-privacy-scrubber`
+- **JSON-LD Structured Data**: Each tool page embeds `schema.org/SoftwareApplication` and `schema.org/FAQPage` structured data for enhanced Google Search rich snippets.
+- **Dynamic Sitemap (`app/sitemap.ts`)**: Pre-rendered to `/sitemap.xml` with priority weighting and change frequencies.
+- **Robots.txt (`app/robots.ts`)**: Pre-rendered to `/robots.txt` guiding search engine crawlers.
+
+---
+
+## 💎 Passive Monetization Architecture
+
+1. **EthicalAds / Carbon Ads Integration (`components/monetization/EthicalAdCard.tsx`)**:
+   - Modular developer ad placement with cookieless tracking.
+   - **Ad-Blocker Detection**: Automatically detects active ad blockers (e.g. uBlock, Brave Shields) and flips to a high-converting, privacy-first sponsor card: *"Ad-Blocker Active — We respect your privacy! Support ClientCraft directly"*.
+2. **Support & Pro Bundle Modal (`components/monetization/ProModal.tsx`)**:
+   - **Lemon Squeezy Overlay Checkout**: Frictionless card and wallet payments.
+   - **Crypto Direct**: One-click clipboard copy for USDT-TRC20 (`TLyqzV83v7bC9YgU8j7f4X6k5aR3e8wM2p`) and Ethereum addresses.
+3. **Cryptographic License Verification (`lib/monetization/license-verifier.ts`)**:
+   - Pure client-side Web Crypto API (`crypto.subtle`) HMAC-SHA256 signature verification.
+   - Stores verified state in `localStorage` with zero server communication.
+   - **Instant Demo Keys for Evaluation**:
+     - Pro Supporter: `CCPRO-eyJ0aWVyIjoicHJvX3N1cHBvcnRlciIsImxpY2Vuc2VkVG8iOiJkZXZlbG9wZXJAY2xpZW50Y3JhZnQuZGV2IiwiaXNzdWVkQXQiOjE3NjAxMDQwMDAwMDB9-d130e9d6d4ae7339c636f90d4e92a8bc333cba73e6a6a2a537fce0a775d71c4c`
+     - Enterprise Lifetime: `CCPRO-eyJ0aWVyIjoiZW50ZXJwcmlzZV9saWZldGltZSIsImxpY2Vuc2VkVG8iOiJhcmNoaXRlY3RAY2xpZW50Y3JhZnQuZGV2IiwiaXNzdWVkQXQiOjE3NjAxMDQwMDAwMDB9-21696a84cf9dc2ab5eef1d6688177543a6aa01e916ce0cf94e4ae0f1e0026e63`
+
+---
+
+## 📊 Privacy-Preserving Cookieless Analytics
+
+- **Cloudflare Web Analytics (`components/analytics/PrivacyAnalytics.tsx`)**: Optional cookieless beacon activated via `NEXT_PUBLIC_CF_ANALYTICS_TOKEN`.
+- **In-Memory Event Bus (`lib/analytics.ts`)**: Dispatches non-identifying telemetry (`image_compressed`, `json_converted`, `privacy_scrubbed`, `pro_unlocked`) with zero cookies, zero device fingerprinting, and zero personal data.
+
+---
+
+## ⚙️ CI/CD & Automated Verification
+
+- **GitHub Actions Workflow (`.github/workflows/ci.yml`)**:
+  - Automated ESLint analysis on every push/PR.
+  - Strict TypeScript compiler type validation (`tsc --noEmit`).
+  - Next.js static production build execution (`npm run build`).
+  - Comprehensive static artifact assertion verifying generated HTML, sitemap, and robots.
+- **Lighthouse CI (`.lighthouserc.json`)**:
+  - Automated audit asserting **95+ scores** across:
+    - **Performance**: ≥ 0.95
+    - **Accessibility**: ≥ 0.95
+    - **Best Practices**: ≥ 0.95
+    - **SEO**: ≥ 0.95
+
+---
+
+## ⚡ Deployment & Build
 
 ```bash
-# Install dependencies
-npm install
-
-# Run development server
+# Development
 npm run dev
 
-# Run ESLint linter
-npm run lint
-
-# Export static build (generates /out with 0 server dependencies)
+# Static Production Build
 npm run build
 ```
-
----
-
-## 🌐 Vercel Deployment Configuration (`vercel.json`)
-
-```json
-{
-  "version": 2,
-  "cleanUrls": true,
-  "trailingSlash": true,
-  "headers": [
-    {
-      "source": "/_next/static/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
-    },
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
-      ]
-    }
-  ]
-}
-```
+Pre-renders all static pages, tool landing pages, sitemap, and robots into `out/` with 100% static HTML.
