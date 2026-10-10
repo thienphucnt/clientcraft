@@ -1,103 +1,173 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState } from "react";
+import { Header } from "@/components/ui/Header";
+import { Footer } from "@/components/ui/Footer";
+import { ImageCompressor } from "@/components/tools/ImageCompressor";
+import { JsonConverter } from "@/components/tools/JsonConverter";
+import { PrivacyScrubber } from "@/components/tools/PrivacyScrubber";
+import {
+  Sparkles,
+  Code2,
+  ShieldCheck,
+  Zap,
+  Lock,
+  Cpu,
+  CheckCircle,
+} from "lucide-react";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [activeTab, setActiveTab] = useState<string>("image");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  return (
+    <div className="min-h-screen flex flex-col justify-between">
+      {/* Global Header */}
+      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Hero Privacy & Architecture Banner */}
+        <section className="relative rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-blue-900/10 via-indigo-900/10 to-purple-900/10 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-purple-950/40 border border-blue-500/20 dark:border-blue-500/15 overflow-hidden">
+          <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+          <div className="absolute -left-16 -bottom-16 w-64 h-64 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-3 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Zero Network Transmission Guarantee</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                Ultra-Lightweight Client-Side Utility Hub
+              </h1>
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                Transform images, generate TypeScript/Zod schemas, and sanitize AI prompts directly in your browser&apos;s memory thread. No servers, no tracking, and fully operable offline via PWA.
+              </p>
+            </div>
+
+            {/* Quick Metrics Badge Grid */}
+            <div className="grid grid-cols-2 gap-3 shrink-0 sm:w-80">
+              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs border border-slate-200/80 dark:border-slate-800 p-3 rounded-2xl flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                  <Zap className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Hosting</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">Static Vercel Edge</p>
+                </div>
+              </div>
+
+              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs border border-slate-200/80 dark:border-slate-800 p-3 rounded-2xl flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Privacy</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">100% In-Memory</p>
+                </div>
+              </div>
+
+              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs border border-slate-200/80 dark:border-slate-800 p-3 rounded-2xl flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                  <Cpu className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Execution</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">Native Canvas/V8</p>
+                </div>
+              </div>
+
+              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs border border-slate-200/80 dark:border-slate-800 p-3 rounded-2xl flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                  <CheckCircle className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">PWA</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">Offline Ready</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Interactive Tool Selector Tabs */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button
+            onClick={() => setActiveTab("image")}
+            className={`p-4 rounded-2xl border text-left transition-all ${
+              activeTab === "image"
+                ? "bg-white dark:bg-slate-900 border-blue-500 shadow-md shadow-blue-500/10 ring-1 ring-blue-500"
+                : "bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+            }`}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                Canvas / Offscreen
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Image &amp; SVG Compressor</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+              Compress PNG/JPEG/WebP and optimize SVG vectors with dimensional limits.
+            </p>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("json")}
+            className={`p-4 rounded-2xl border text-left transition-all ${
+              activeTab === "json"
+                ? "bg-white dark:bg-slate-900 border-indigo-500 shadow-md shadow-indigo-500/10 ring-1 ring-indigo-500"
+                : "bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+            }`}
           >
-            Read our docs
-          </a>
-        </div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                <Code2 className="w-4 h-4" />
+              </div>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                Live Dual Pane
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">JSON → TypeScript &amp; Zod</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+              Converts raw JSON into nested TypeScript interfaces and Zod validation schemas.
+            </p>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("scrubber")}
+            className={`p-4 rounded-2xl border text-left transition-all ${
+              activeTab === "scrubber"
+                ? "bg-white dark:bg-slate-900 border-emerald-500 shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500"
+                : "bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                AI Prompt Safe
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">Text Privacy Scrubber</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+              Strip API keys, secrets, emails, and IPs before sending prompts to external LLMs.
+            </p>
+          </button>
+        </section>
+
+        {/* Active Tool Viewport */}
+        <section className="bg-white/90 dark:bg-slate-900/70 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs backdrop-blur-xs">
+          {activeTab === "image" && <ImageCompressor />}
+          {activeTab === "json" && <JsonConverter />}
+          {activeTab === "scrubber" && <PrivacyScrubber />}
+        </section>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+      {/* Global Footer */}
+      <Footer />
     </div>
   );
 }
