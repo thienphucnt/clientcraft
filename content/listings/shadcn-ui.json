@@ -1,0 +1,34 @@
+{
+  "id": "shadcn-ui",
+  "title": "shadcn/ui",
+  "slug": "shadcn-ui",
+  "description": "Beautifully designed, accessible components that you copy and paste into your apps. Accessible, customizable, and open source with full code ownership.",
+  "category": "Design & UI",
+  "tags": ["ui-components", "tailwind", "radix", "react", "open-source", "accessibility"],
+  "url": "https://ui.shadcn.com",
+  "affiliateUrl": null,
+  "featuredUntil": null,
+  "pricingModel": "Open Source",
+  "dateAdded": "2026-02-14",
+  "verified": true,
+  "features": [
+    "Not a component library: code lives directly in your repository",
+    "Built on accessible Radix UI primitives and Tailwind CSS utility classes",
+    "Interactive CLI (`npx shadcn@latest add button dialog`) for zero-friction adoption",
+    "Themes, CSS variables, and light/dark mode out of the box",
+    "Compatible with Next.js, Vite, Remix, Astro, and React Native"
+  ],
+  "pros": [
+    "100% code ownership: modify any styling or behavior without monkey-patching",
+    "De facto standard for modern React applications",
+    "Extensive registry system for community blocks and templates"
+  ],
+  "cons": [
+    "Upgrading components requires manual git diffing rather than `npm update`",
+    "Initial theme configuration requires understanding Tailwind v4 CSS vars"
+  ],
+  "targetAudience": "Full-stack React/Next.js engineers wanting complete aesthetic control without heavy node_modules UI bloat.",
+  "githubUrl": "https://github.com/shadcn-ui/ui",
+  "stars": "72k+",
+  "license": "MIT"
+}

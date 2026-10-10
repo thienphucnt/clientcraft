@@ -1,0 +1,34 @@
+{
+  "id": "resend",
+  "title": "Resend",
+  "slug": "resend",
+  "description": "The next-generation transactional email platform for developers, built around React Email components, first-class DX, and high deliverability.",
+  "category": "Developer Tools",
+  "tags": ["email", "react-email", "developer-tools", "api", "smtp"],
+  "url": "https://resend.com",
+  "affiliateUrl": "https://resend.com/?ref=devstack",
+  "featuredUntil": "2026-10-31T23:59:59Z",
+  "pricingModel": "Freemium",
+  "dateAdded": "2026-01-20",
+  "verified": true,
+  "features": [
+    "Native React Email component support for code-first HTML templates",
+    "DKIM, SPF, and DMARC 1-click domain verification",
+    "Real-time event webhooks for delivered, bounced, and clicked emails",
+    "Comprehensive REST API and first-party SDKs for Node, Python, Ruby, Go",
+    "Broadcast marketing email engine alongside transactional pipelines"
+  ],
+  "pros": [
+    "Cleanest developer dashboard and modern API design in the email industry",
+    "Eliminates painful table-based HTML email slicing",
+    "3,000 free emails per month included"
+  ],
+  "cons": [
+    "Strict automated spam filtering can flag unverified sender domains",
+    "Paid tiers scale quickly with high-volume bulk marketing sends"
+  ],
+  "targetAudience": "Modern full-stack developers and SaaS founders sending transactional & onboarding emails.",
+  "githubUrl": "https://github.com/resend/react-email",
+  "stars": "15k+",
+  "license": "Proprietary / MIT Templates"
+}
