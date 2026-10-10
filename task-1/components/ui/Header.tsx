@@ -11,14 +11,21 @@ interface HeaderProps {
   activeTab?: string;
   setActiveTab?: (tab: string) => void;
   onOpenProModal?: () => void;
+  isPro?: boolean;
 }
 
-export function Header({ activeTab, setActiveTab, onOpenProModal }: HeaderProps) {
-  const [isPro, setIsPro] = useState(false);
+export function Header({ activeTab, setActiveTab, onOpenProModal, isPro: propIsPro }: HeaderProps) {
+  const [internalIsPro, setInternalIsPro] = useState(false);
 
   useEffect(() => {
-    getStoredLicense().then((s) => setIsPro(s.isUnlocked));
-  }, []);
+    if (propIsPro !== undefined) {
+      setInternalIsPro(propIsPro);
+    } else {
+      getStoredLicense().then((s) => setInternalIsPro(s.isUnlocked));
+    }
+  }, [propIsPro]);
+
+  const isPro = propIsPro !== undefined ? propIsPro : internalIsPro;
 
   const tools = [
     { id: "image", href: "/tools/image-compressor", label: "Image Compressor", icon: Sparkles },

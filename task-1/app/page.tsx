@@ -10,6 +10,7 @@ import { PrivacyScrubber } from "@/components/tools/PrivacyScrubber";
 import { EthicalAdCard } from "@/components/monetization/EthicalAdCard";
 import { ProModal } from "@/components/monetization/ProModal";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { getStoredLicense } from "@/lib/monetization/license-verifier";
 import {
   Sparkles,
   Code2,
@@ -24,6 +25,15 @@ import {
 export default function Home() {
   const [activeTab, setActiveTab] = useState<string>("image");
   const [isProModalOpen, setIsProModalOpen] = useState<boolean>(false);
+  const [isPro, setIsPro] = useState<boolean>(false);
+
+  const refreshLicense = React.useCallback(() => {
+    getStoredLicense().then((s) => setIsPro(s.isUnlocked));
+  }, []);
+
+  React.useEffect(() => {
+    refreshLicense();
+  }, [refreshLicense]);
 
   return (
     <div className="min-h-screen flex flex-col justify-between">
@@ -31,6 +41,7 @@ export default function Home() {
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        isPro={isPro}
         onOpenProModal={() => setIsProModalOpen(true)}
       />
 
@@ -205,13 +216,17 @@ export default function Home() {
         </section>
 
         {/* Ethical Ad Placement */}
-        <EthicalAdCard onOpenProModal={() => setIsProModalOpen(true)} />
+        <EthicalAdCard
+          isPro={isPro}
+          onOpenProModal={() => setIsProModalOpen(true)}
+        />
       </main>
 
       {/* Pro Modal */}
       <ProModal
         isOpen={isProModalOpen}
         onClose={() => setIsProModalOpen(false)}
+        onLicenseChanged={refreshLicense}
       />
 
       {/* Global Footer */}

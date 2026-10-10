@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { convertJsonToTsAndZod } from "@/lib/tools/json-to-ts-zod";
 import { trackPrivacyEvent } from "@/lib/analytics";
+import { getStoredLicense } from "@/lib/monetization/license-verifier";
 
 const SAMPLE_PAYLOADS = {
   userProfile: JSON.stringify(
@@ -117,6 +118,11 @@ export function JsonConverter() {
   const [viewMode, setViewMode] = useState<"ts" | "zod" | "split">("split");
   const [copiedTs, setCopiedTs] = useState<boolean>(false);
   const [copiedZod, setCopiedZod] = useState<boolean>(false);
+  const [isPro, setIsPro] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    getStoredLicense().then((s) => setIsPro(s.isUnlocked));
+  }, []);
 
   // Conversion result
   const result = useMemo(() => {
@@ -282,6 +288,12 @@ export function JsonConverter() {
             />
             <span>Use Type Alias</span>
           </label>
+
+          {isPro && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              ✨ Pro Supporter Mode Unlocked
+            </span>
+          )}
         </div>
 
         {/* Right: View Mode Toggle */}

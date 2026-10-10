@@ -1,19 +1,28 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, Heart, Sparkles, ExternalLink } from "lucide-react";
+import { ShieldCheck, Heart, Sparkles, ExternalLink, Award } from "lucide-react";
+import { getStoredLicense } from "@/lib/monetization/license-verifier";
 
 interface EthicalAdCardProps {
   onOpenProModal?: () => void;
   className?: string;
+  isPro?: boolean;
 }
 
-export function EthicalAdCard({ onOpenProModal, className = "" }: EthicalAdCardProps) {
+export function EthicalAdCard({ onOpenProModal, className = "", isPro: propIsPro }: EthicalAdCardProps) {
   const [isAdBlockerActive, setIsAdBlockerActive] = useState<boolean>(false);
   const [mounted, setMounted] = useState<boolean>(false);
+  const [internalIsPro, setInternalIsPro] = useState<boolean>(false);
 
   useEffect(() => {
     setMounted(true);
+
+    if (propIsPro !== undefined) {
+      setInternalIsPro(propIsPro);
+    } else {
+      getStoredLicense().then((s) => setInternalIsPro(s.isUnlocked));
+    }
 
     // Ad blocker probe
     const testAd = document.createElement("div");
@@ -41,11 +50,50 @@ export function EthicalAdCard({ onOpenProModal, className = "" }: EthicalAdCardP
         document.body.removeChild(testAd);
       }
     };
-  }, []);
+  }, [propIsPro]);
+
+  const isPro = propIsPro !== undefined ? propIsPro : internalIsPro;
 
   if (!mounted) {
     return (
       <div className={`p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 animate-pulse h-28 ${className}`} />
+    );
+  }
+
+  // When Pro is active, show clean supporter acknowledgment card instead of ads
+  if (isPro) {
+    return (
+      <div
+        className={`p-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 dark:bg-slate-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${className}`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <Award className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                Pro Supporter Active
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                Ads Silenced
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+              All advertisements and sponsorship prompts are permanently disabled for your device. Thank you for supporting privacy-first open web tools!
+            </p>
+          </div>
+        </div>
+
+        {onOpenProModal && (
+          <button
+            onClick={onOpenProModal}
+            className="shrink-0 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors"
+          >
+            Manage License
+          </button>
+        )}
+      </div>
     );
   }
 

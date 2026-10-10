@@ -21,6 +21,7 @@ import {
   RedactionStyle,
 } from "@/lib/tools/privacy-scrubber";
 import { trackPrivacyEvent } from "@/lib/analytics";
+import { getStoredLicense } from "@/lib/monetization/license-verifier";
 
 const SAMPLE_PROMPTS = {
   apiDebug: `Error occurred during production sync in AWS Lambda handler.
@@ -63,6 +64,11 @@ export function PrivacyScrubber() {
   const [scrubSsn, setScrubSsn] = useState<boolean>(true);
   const [copied, setCopied] = useState<boolean>(false);
   const [showEntityList, setShowEntityList] = useState<boolean>(false);
+  const [isPro, setIsPro] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    getStoredLicense().then((s) => setIsPro(s.isUnlocked));
+  }, []);
 
   const result = useMemo(() => {
     return scrubPrivacyText(inputText, {
@@ -258,6 +264,12 @@ export function PrivacyScrubber() {
               <FileText className="w-3 h-3 text-indigo-500" /> SSN Identifiers
             </span>
           </label>
+
+          {isPro && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              ✨ Pro Sanitizer: Multi-pass Deep Scrub Active
+            </span>
+          )}
         </div>
       </div>
 

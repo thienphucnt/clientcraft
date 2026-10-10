@@ -19,6 +19,7 @@ import {
   CompressionResult,
 } from "@/lib/tools/image-compressor";
 import { trackPrivacyEvent } from "@/lib/analytics";
+import { getStoredLicense } from "@/lib/monetization/license-verifier";
 
 export function ImageCompressor() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -28,6 +29,11 @@ export function ImageCompressor() {
   const [format, setFormat] = useState<CompressionOptions["format"]>("webp");
   const [keepAspectRatio] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isPro, setIsPro] = useState<boolean>(false);
+
+  useEffect(() => {
+    getStoredLicense().then((s) => setIsPro(s.isUnlocked));
+  }, []);
   const [result, setResult] = useState<CompressionResult | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -341,7 +347,7 @@ export function ImageCompressor() {
                   { label: "Original", val: undefined },
                   { label: "1080p", val: 1920 },
                   { label: "720p", val: 1280 },
-                  { label: "800px", val: 800 },
+                  { label: isPro ? "4K (Pro)" : "800px", val: isPro ? 3840 : 800 },
                 ].map((item) => (
                   <button
                     key={item.label}
@@ -356,6 +362,11 @@ export function ImageCompressor() {
                   </button>
                 ))}
               </div>
+              {isPro && (
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                  ✨ Pro Perk: 4K Ultra (3840px) downsampling constraint unlocked.
+                </p>
+              )}
             </div>
           </div>
         </div>
