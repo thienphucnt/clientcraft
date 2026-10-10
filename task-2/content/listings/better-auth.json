@@ -1,0 +1,34 @@
+{
+  "id": "better-auth",
+  "title": "Better Auth",
+  "slug": "better-auth",
+  "description": "The comprehensive TypeScript-first authentication framework for modern web frameworks with plugins for two-factor auth, passkeys, multi-tenancy, and admin roles.",
+  "category": "Security & Auth",
+  "tags": ["auth", "typescript", "passkeys", "2fa", "security", "open-source"],
+  "url": "https://better-auth.com",
+  "affiliateUrl": null,
+  "featuredUntil": "2026-11-01T23:59:59Z",
+  "pricingModel": "Open Source",
+  "dateAdded": "2026-03-24",
+  "verified": true,
+  "features": [
+    "Framework agnostic: works natively in Next.js, Nuxt, SvelteKit, Astro, Remix, and Express",
+    "Database agnostic with first-class Drizzle, Prisma, and Kysely adapters",
+    "Extensive official plugin ecosystem (Passkeys/WebAuthn, Two-Factor, Organization/Teams, Magic Links)",
+    "Built-in rate limiting and CSRF protection mechanisms",
+    "100% type-safe client with inference derived directly from server auth schema"
+  ],
+  "pros": [
+    "Solves the complexity and breaking changes of legacy NextAuth/Auth.js",
+    "Modularity: only pay the bundle size for the features and plugins you actually use",
+    "Comprehensive documentation and modern developer ergonomics"
+  ],
+  "cons": [
+    "Relatively young project with rapidly evolving minor release cycles",
+    "Requires configuring your own database tables and schema migrations"
+  ],
+  "targetAudience": "Modern TypeScript and Next.js developers needing robust, extensible self-hosted authentication.",
+  "githubUrl": "https://github.com/better-auth/better-auth",
+  "stars": "12k+",
+  "license": "Apache 2.0"
+}

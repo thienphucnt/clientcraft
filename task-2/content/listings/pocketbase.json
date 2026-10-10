@@ -1,0 +1,34 @@
+{
+  "id": "pocketbase",
+  "title": "PocketBase",
+  "slug": "pocketbase",
+  "description": "An open source backend in 1 single binary file consisting of embedded SQLite database, realtime subscriptions, file storage, and an elegant admin dashboard.",
+  "category": "Database & Backend",
+  "tags": ["sqlite", "backend", "go", "self-hosted", "realtime", "open-source"],
+  "url": "https://pocketbase.io",
+  "affiliateUrl": null,
+  "featuredUntil": null,
+  "pricingModel": "Open Source",
+  "dateAdded": "2026-02-01",
+  "verified": true,
+  "features": [
+    "Single executable binary written in Go with embedded SQLite database",
+    "Realtime websocket event subscriptions with fine-grained collection rules",
+    "Built-in authentication with OAuth2 providers (Google, GitHub, Discord, Apple)",
+    "Local disk or S3-compatible file storage with automatic thumbnail generation",
+    "Extensible as a Go framework or via server-side JavaScript hooks"
+  ],
+  "pros": [
+    "Zero DevOps complexity: run `./pocketbase serve` and your backend is live",
+    "Tiny memory footprint (< 30MB RAM idle) running effortlessly on a $4/mo VPS",
+    "Extremely clear documentation and clean SDKs (JS/TS, Dart, Python)"
+  ],
+  "cons": [
+    "Single-node SQLite means vertical scaling only; no multi-region clustering",
+    "Limited complex relational queries compared to full PostgreSQL"
+  ],
+  "targetAudience": "Mobile developers, solo creators, and rapid prototyping teams needing a backend in minutes.",
+  "githubUrl": "https://github.com/pocketbase/pocketbase",
+  "stars": "43k+",
+  "license": "MIT"
+}

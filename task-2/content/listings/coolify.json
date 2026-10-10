@@ -1,0 +1,34 @@
+{
+  "id": "coolify",
+  "title": "Coolify",
+  "slug": "coolify",
+  "description": "An open-source, self-hostable Heroku & Netlify alternative to deploy apps, databases, and services onto your own servers with zero configuration.",
+  "category": "Cloud & Infrastructure",
+  "tags": ["self-hosted", "paas", "devops", "docker", "open-source", "hosting"],
+  "url": "https://coolify.io",
+  "affiliateUrl": null,
+  "featuredUntil": "2026-12-15T23:59:59Z",
+  "pricingModel": "Open Source",
+  "dateAdded": "2026-01-25",
+  "verified": true,
+  "features": [
+    "One-line curl installation script onto any Linux VPS (Hetzner, OVH, AWS)",
+    "Automatic SSL certificate generation via Traefik & Let's Encrypt",
+    "Support for Node.js, Next.js, Python, Go, Rust, PHP, and Docker Compose",
+    "Managed database instances (Postgres, MySQL, MariaDB, Redis, MongoDB)",
+    "Git webhook triggers and preview deployments for GitHub and GitLab"
+  ],
+  "pros": [
+    "Slashes thousands in PaaS cloud bills by utilizing cheap VPS hardware",
+    "Zero vendor lock-in with direct access to Docker engine",
+    "Active open-source community and rapid release cadence"
+  ],
+  "cons": [
+    "Requires basic Linux VPS administration and backup management",
+    "No built-in global edge multi-region routing without external Cloudflare setup"
+  ],
+  "targetAudience": "Indie hackers, homelab enthusiasts, and startups wanting self-hosted PaaS without AWS overhead.",
+  "githubUrl": "https://github.com/coollabsio/coolify",
+  "stars": "38k+",
+  "license": "Apache 2.0"
+}

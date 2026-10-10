@@ -1,0 +1,34 @@
+{
+  "id": "transformers",
+  "title": "Hugging Face Transformers",
+  "slug": "transformers",
+  "description": "State-of-the-art Machine Learning library for PyTorch, TensorFlow, and JAX providing thousands of pretrained models for text, vision, and audio tasks.",
+  "category": "AI & Machine Learning",
+  "tags": ["machine-learning", "pytorch", "transformers", "open-source", "python", "ai"],
+  "url": "https://huggingface.co/docs/transformers",
+  "affiliateUrl": null,
+  "featuredUntil": null,
+  "pricingModel": "Open Source",
+  "dateAdded": "2026-03-28",
+  "verified": true,
+  "features": [
+    "Unified API for thousands of state-of-the-art pretrained transformer architectures",
+    "Seamless switching between PyTorch, TensorFlow, and JAX runtimes",
+    "Quantization support via bitsandbytes, AWQ, and GPTQ for low-memory execution",
+    "Automated pipeline abstraction for NLP, Computer Vision, and Speech tasks",
+    "Direct hub integration for downloading weights, tokenizers, and datasets"
+  ],
+  "pros": [
+    "The undisputed foundational cornerstone of modern open-source AI and ML research",
+    "Enormous active global community and unmatched model ecosystem",
+    "Clear abstraction layers for fine-tuning, training, and inference"
+  ],
+  "cons": [
+    "Python-centric ecosystem requires Python runtime or ONNX export for JS runtime usage",
+    "Heavy library footprint with deep dependency graphs"
+  ],
+  "targetAudience": "Machine learning engineers, AI researchers, and data scientists fine-tuning and serving neural networks.",
+  "githubUrl": "https://github.com/huggingface/transformers",
+  "stars": "135k+",
+  "license": "Apache 2.0"
+}

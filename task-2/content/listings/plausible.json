@@ -1,0 +1,34 @@
+{
+  "id": "plausible",
+  "title": "Plausible Analytics",
+  "slug": "plausible",
+  "description": "Simple, open-source, lightweight (< 1KB), and privacy-friendly web analytics alternative to Google Analytics with zero cookies and 100% GDPR compliance.",
+  "category": "Cloud & Infrastructure",
+  "tags": ["analytics", "privacy", "open-source", "gdpr", "self-hosted"],
+  "url": "https://plausible.io",
+  "affiliateUrl": "https://plausible.io/?ref=devstack",
+  "featuredUntil": null,
+  "pricingModel": "Free Trial",
+  "dateAdded": "2026-03-01",
+  "verified": true,
+  "features": [
+    "Ultra-lightweight script snippet weighing under 1KB (45x lighter than GA4)",
+    "No cookie banners required; strictly respects GDPR, CCPA, and PECR privacy rules",
+    "Clean, intuitive one-page dashboard displaying all vital metrics at a glance",
+    "Custom event tracking, conversion goals, and revenue attribution metrics",
+    "Fully open source and self-hostable via Docker Compose with ClickHouse backend"
+  ],
+  "pros": [
+    "Eliminates annoying cookie consent banners on your website",
+    "No impact on site performance and Google Core Web Vitals score",
+    "Accurate referral and UTM source tracking"
+  ],
+  "cons": [
+    "No free hosted cloud tier (30-day trial only, paid cloud plans)",
+    "Does not provide cross-device behavioral retargeting or user session stitching"
+  ],
+  "targetAudience": "Privacy-focused site owners, SaaS startups, and European businesses needing GDPR compliance.",
+  "githubUrl": "https://github.com/plausible/analytics",
+  "stars": "18k+",
+  "license": "AGPL-3.0"
+}

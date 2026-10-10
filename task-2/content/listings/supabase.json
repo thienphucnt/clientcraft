@@ -1,0 +1,34 @@
+{
+  "id": "supabase",
+  "title": "Supabase",
+  "slug": "supabase",
+  "description": "The open-source Firebase alternative providing a dedicated PostgreSQL database, built-in Authentication, Edge Functions, Realtime subscriptions, and Vector embeddings.",
+  "category": "Database & Backend",
+  "tags": ["postgres", "database", "auth", "realtime", "open-source", "vector"],
+  "url": "https://supabase.com",
+  "affiliateUrl": "https://supabase.com/?ref=devstack",
+  "featuredUntil": "2026-11-30T23:59:59Z",
+  "pricingModel": "Freemium",
+  "dateAdded": "2026-01-12",
+  "verified": true,
+  "features": [
+    "Full PostgreSQL database with row-level security (RLS) support",
+    "Complete authentication suite with OAuth, magic links, and MFA",
+    "Realtime websockets for table change broadcasts",
+    "pgvector extension enabled by default for AI embeddings",
+    "Automated REST and GraphQL APIs generated straight from SQL schemas"
+  ],
+  "pros": [
+    "Enterprise-grade relational database with no vendor lock-in",
+    "Generous free tier for hobbyists and side projects",
+    "Full self-hosting capabilities via Docker Compose"
+  ],
+  "cons": [
+    "Inactivity pauses on free tier projects after one week",
+    "Requires SQL proficiency to craft secure Row-Level Security policies"
+  ],
+  "targetAudience": "Full-stack indie hackers, startups, and engineering teams building Postgres-backed web apps.",
+  "githubUrl": "https://github.com/supabase/supabase",
+  "stars": "75k+",
+  "license": "Apache 2.0"
+}

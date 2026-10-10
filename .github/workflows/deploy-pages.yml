@@ -29,11 +29,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: task-1/package-lock.json
 
       - name: Install dependencies
+        working-directory: ./task-1
         run: npm ci
 
       - name: Build static export
+        working-directory: ./task-1
         run: npm run build
         env:
           NEXT_PUBLIC_BASE_PATH: /clientcraft
@@ -42,7 +45,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./out
+          path: ./task-1/out
 
       - name: Deploy to GitHub Pages
         id: deployment

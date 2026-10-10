@@ -24,20 +24,26 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
+          cache-dependency-path: task-1/package-lock.json
 
       - name: Install dependencies
+        working-directory: ./task-1
         run: npm ci
 
       - name: Run ESLint
+        working-directory: ./task-1
         run: npm run lint
 
       - name: TypeScript typecheck
+        working-directory: ./task-1
         run: npx tsc --noEmit
 
       - name: Build static export
+        working-directory: ./task-1
         run: npm run build
 
       - name: Assert pre-rendered static artifacts
+        working-directory: ./task-1
         run: |
           test -f out/index.html || (echo "Missing out/index.html" && exit 1)
           test -f out/sitemap.xml || (echo "Missing out/sitemap.xml" && exit 1)
@@ -48,7 +54,8 @@ jobs:
           echo "All static artifacts verified successfully."
 
       - name: Run Lighthouse CI Action
+        working-directory: ./task-1
         uses: treosh/lighthouse-ci-action@v12
         with:
-          configPath: './.lighthouserc.json'
+          configPath: './task-1/.lighthouserc.json'
           uploadArtifacts: true

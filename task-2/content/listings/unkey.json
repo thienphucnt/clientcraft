@@ -1,0 +1,34 @@
+{
+  "id": "unkey",
+  "title": "Unkey",
+  "slug": "unkey",
+  "description": "Open-source API key management and rate limiting platform for building developer-facing APIs with sub-10ms global verification latency.",
+  "category": "Security & Auth",
+  "tags": ["api-keys", "rate-limiting", "security", "developer-tools", "open-source"],
+  "url": "https://unkey.com",
+  "affiliateUrl": "https://unkey.com/?ref=devstack",
+  "featuredUntil": null,
+  "pricingModel": "Freemium",
+  "dateAdded": "2026-02-18",
+  "verified": true,
+  "features": [
+    "Sub-10ms global API key verification backed by Cloudflare edge caching",
+    "Granular rate limiting algorithms (sliding window, token bucket, fixed window)",
+    "Hierarchical permissions and metadata attached directly to cryptographic keys",
+    "Comprehensive audit logs, usage analytics, and quota enforcement",
+    "Self-hostable via Docker or managed cloud service"
+  ],
+  "pros": [
+    "Eliminates rolling your own brittle Redis-based rate limiting architecture",
+    "Instant revocation and security key lifecycle management",
+    "Generous developer tier with up to 10,000 monthly key verifications"
+  ],
+  "cons": [
+    "Self-hosting requires ClickHouse and Redis operational familiarity",
+    "Edge sync delays can occasionally allow slight burst over-limit"
+  ],
+  "targetAudience": "API product builders, SaaS founders, and engineering teams monetizing developer APIs.",
+  "githubUrl": "https://github.com/unkeyed/unkey",
+  "stars": "7k+",
+  "license": "Apache 2.0"
+}
