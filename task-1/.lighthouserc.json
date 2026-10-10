@@ -1,7 +1,7 @@
 {
   "ci": {
     "collect": {
-      "staticDistDir": "./out",
+      "staticDistDir": "./task-1/out",
       "url": [
         "http://localhost/index.html",
         "http://localhost/tools/image-compressor/index.html",

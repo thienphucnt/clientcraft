@@ -54,7 +54,6 @@ jobs:
           echo "All static artifacts verified successfully."
 
       - name: Run Lighthouse CI Action
-        working-directory: ./task-1
         uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: './task-1/.lighthouserc.json'
