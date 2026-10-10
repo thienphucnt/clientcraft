@@ -1,6 +1,6 @@
-# ClientCraft — Privacy-First Web Utility Suite
+# ClientCraft — Privacy-First Web Utility Suite & Growth Engine
 
-> **Ultra-lightweight, high-performance web utility hub engineered for 100% client-side in-memory execution, static Vercel Edge hosting, and offline PWA capability.**
+> **Ultra-lightweight, high-performance web utility hub engineered for 100% client-side in-memory execution, static Vercel Edge hosting, offline PWA resilience, programmatic SEO metadata, and passive monetization.**
 
 ---
 
@@ -8,7 +8,7 @@
 
 Every utility in ClientCraft operates strictly in the client's browser V8 engine thread:
 - **0 Server Relays**: No API backends, no database logging, no external server calls.
-- **In-Memory Volatility**: Data loaded into Canvas or AST parsers is stored strictly in memory and cleared on reload.
+- **In-Memory Volatility**: Data loaded into Canvas, AST parsers, or regex scrubbers is stored strictly in memory and cleared on reload.
 - **Offline PWA**: Full Service Worker caching enables 100% offline functionality.
 - **Static Edge Export**: Pre-rendered static assets deployable globally to Vercel Edge with zero server runtimes.
 
@@ -17,6 +17,7 @@ Every utility in ClientCraft operates strictly in the client's browser V8 engine
 ## 🛠️ Core Client-Side Tools
 
 ### 1. SVG & Raster Image Compressor
+- **Route**: [`/tools/image-compressor`](https://clientcraft.dev/tools/image-compressor)
 - **Engine**: Browser-native Canvas API and `OffscreenCanvas` with bicubic interpolation.
 - **Formats**: PNG, JPEG, WebP, SVG vectors, GIF, BMP.
 - **Features**:
@@ -27,6 +28,7 @@ Every utility in ClientCraft operates strictly in the client's browser V8 engine
   - Instant client-side download and Base64 Data URI clipboard copying.
 
 ### 2. Live JSON to TypeScript & Zod Schema Converter
+- **Route**: [`/tools/json-to-typescript`](https://clientcraft.dev/tools/json-to-typescript)
 - **Engine**: Client-side recursive AST type generator.
 - **Features**:
   - Dual-pane live reactive code editor with real-time JSON syntax validation and error feedback.
@@ -37,6 +39,7 @@ Every utility in ClientCraft operates strictly in the client's browser V8 engine
   - Built-in sample payloads (User Profile, E-Commerce Order, Paginated API).
 
 ### 3. AI Prompt & PII Privacy Scrubber
+- **Route**: [`/tools/text-privacy-scrubber`](https://clientcraft.dev/tools/text-privacy-scrubber)
 - **Engine**: Client-side high-throughput regex redaction pipeline.
 - **Detected Entities**:
   - API Keys & Secrets: OpenAI (`sk-...`), AWS (`AKIA...`), GitHub (`ghp_...`), Google (`AIza...`), Slack (`xox...`), JWT Bearer tokens, and generic secrets.
@@ -53,34 +56,84 @@ Every utility in ClientCraft operates strictly in the client's browser V8 engine
 
 ---
 
+## 📱 Progressive Web App (PWA) & Offline Resilience
+
+- **Service Worker (`public/sw.js`)**:
+  - Caches all JS bundles, CSS stylesheets, web fonts (`.woff2`), icons, and static routes on initial load.
+  - Cache-first strategy for immutable assets; network-first with offline fallback for navigation.
+- **Web App Manifest (`public/manifest.json`)**: Configured with maskable vector icons (192px & 512px) and standalone display for native installation on desktop and mobile.
+- **Reactive Offline Indicator (`components/PwaRegister.tsx`)**: Real-time connection badge in header and floating toast notification informing users when operating in offline mode.
+
+---
+
+## 🌐 Programmatic SEO Architecture
+
+- **Dedicated Static Landing Pages**:
+  - `/tools/image-compressor`
+  - `/tools/json-to-typescript`
+  - `/tools/text-privacy-scrubber`
+- **JSON-LD Structured Data**: Each tool page embeds `schema.org/SoftwareApplication` and `schema.org/FAQPage` structured data for enhanced Google Search rich snippets.
+- **Dynamic Sitemap (`app/sitemap.ts`)**: Pre-rendered to `/sitemap.xml` with priority weighting and change frequencies.
+- **Robots.txt (`app/robots.ts`)**: Pre-rendered to `/robots.txt` guiding search engine crawlers.
+
+---
+
+## 💎 Passive Monetization Architecture
+
+1. **EthicalAds / Carbon Ads Integration (`components/monetization/EthicalAdCard.tsx`)**:
+   - Modular developer ad placement with cookieless tracking.
+   - **Ad-Blocker Detection**: Automatically detects active ad blockers (e.g. uBlock, Brave Shields) and flips to a high-converting, privacy-first sponsor card: *"Ad-Blocker Active — We respect your privacy! Support ClientCraft directly"*.
+2. **Support & Pro Bundle Modal (`components/monetization/ProModal.tsx`)**:
+   - **Lemon Squeezy Overlay Checkout**: Frictionless card and wallet payments.
+   - **Crypto Direct**: One-click clipboard copy for USDT-TRC20 (`TLyqzV83v7bC9YgU8j7f4X6k5aR3e8wM2p`) and Ethereum addresses.
+3. **Cryptographic License Verification (`lib/monetization/license-verifier.ts`)**:
+   - Pure client-side Web Crypto API (`crypto.subtle`) HMAC-SHA256 signature verification.
+   - Stores verified state in `localStorage` with zero server communication.
+   - **Instant Demo Keys for Evaluation**:
+     - Pro Supporter: `CCPRO-eyJ0aWVyIjoicHJvX3N1cHBvcnRlciIsImxpY2Vuc2VkVG8iOiJkZXZlbG9wZXJAY2xpZW50Y3JhZnQuZGV2IiwiaXNzdWVkQXQiOjE3NjAxMDQwMDAwMDB9-d130e9d6d4ae7339c636f90d4e92a8bc333cba73e6a6a2a537fce0a775d71c4c`
+     - Enterprise Lifetime: `CCPRO-eyJ0aWVyIjoiZW50ZXJwcmlzZV9saWZldGltZSIsImxpY2Vuc2VkVG8iOiJhcmNoaXRlY3RAY2xpZW50Y3JhZnQuZGV2IiwiaXNzdWVkQXQiOjE3NjAxMDQwMDAwMDB9-21696a84cf9dc2ab5eef1d6688177543a6aa01e916ce0cf94e4ae0f1e0026e63`
+
+---
+
 ## 📁 Repository Structure
 
 ```
 ├── app/
 │   ├── layout.tsx         # Root layout, theme initialization script, PWA metadata
-│   ├── page.tsx           # Dashboard hub with interactive tool selector
-│   └── globals.css        # Tailwind CSS v4 design tokens and custom scrollbars
+│   ├── page.tsx           # Hub dashboard with hero banner & active tool viewports
+│   ├── globals.css        # Tailwind CSS v4 design tokens and custom scrollbars
+│   ├── sitemap.ts         # Programmatic sitemap generator (sitemap.xml)
+│   ├── robots.ts          # Programmatic crawler instructions (robots.txt)
+│   └── tools/             # Programmatic SEO landing pages
+│       ├── image-compressor/page.tsx
+│       ├── json-to-typescript/page.tsx
+│       └── text-privacy-scrubber/page.tsx
 ├── components/
-│   ├── ui/
-│   │   ├── Header.tsx     # Brand banner, tool navigation, theme toggle
-│   │   ├── Footer.tsx     # Privacy guarantees & system specs
-│   │   └── ThemeToggle.tsx# Light / Dark / System theme switcher
+│   ├── monetization/
+│   │   ├── EthicalAdCard.tsx  # Cookieless ad placement with blocker fallback
+│   │   └── ProModal.tsx       # Lemon Squeezy, Crypto & HMAC license modal
 │   ├── tools/
 │   │   ├── ImageCompressor.tsx # Client-side image & SVG compressor
 │   │   ├── JsonConverter.tsx   # Dual-pane JSON to TS/Zod converter
 │   │   └── PrivacyScrubber.tsx # AI prompt sanitizer & PII scrubber
-│   └── PwaRegister.tsx    # Service Worker registration & offline status indicator
+│   ├── ui/
+│   │   ├── Header.tsx         # Navigation, Pro Supporter pill, theme toggle
+│   │   ├── Footer.tsx         # Privacy guarantees & system specs
+│   │   └── ThemeToggle.tsx    # Light / Dark / System theme switcher
+│   └── PwaRegister.tsx        # Service Worker registration & offline toast alert
 ├── lib/
-│   ├── tools/
-│   │   ├── image-compressor.ts # Canvas & SVG processing engine
-│   │   ├── json-to-ts-zod.ts   # AST type generator engine
-│   │   └── privacy-scrubber.ts # Regex detection & tokenizing engine
-│   └── theme-provider.tsx      # Theme context and localStorage persistence
+│   ├── monetization/
+│   │   └── license-verifier.ts # Web Crypto HMAC-SHA256 signature verifier
+│   ├── theme-provider.tsx     # Theme context and localStorage persistence
+│   └── tools/
+│       ├── image-compressor.ts # Canvas & SVG processing engine
+│       ├── json-to-ts-zod.ts   # AST type generator engine
+│       └── privacy-scrubber.ts # Regex detection & tokenizing engine
 ├── public/
 │   ├── icons/             # 192x192 and 512x512 PWA vector icons
 │   ├── manifest.json      # PWA Web App Manifest
 │   └── sw.js              # Service Worker for offline asset caching
-├── next.config.ts         # Next.js 15 static export configuration (`output: 'export'`)
+├── next.config.ts         # Next.js 15 static export configuration ('output: export')
 ├── vercel.json            # Vercel deployment with aggressive immutable caching
 └── tsconfig.json          # Strict TypeScript configuration
 ```
@@ -98,22 +151,4 @@ npm run dev
 ```bash
 npm run build
 ```
-Builds the static application to the `out/` directory with 100% pre-rendered HTML and client-side JavaScript bundles.
-
-### Vercel Deployment
-Configured via `vercel.json` with aggressive immutable caching:
-```json
-{
-  "source": "/_next/static/(.*)",
-  "headers": [
-    {
-      "key": "Cache-Control",
-      "value": "public, max-age=31536000, immutable"
-    }
-  ]
-}
-```
-Ready to deploy directly with the Vercel CLI:
-```bash
-npx vercel deploy --prod
-```
+Pre-renders all static pages, tool landing pages, sitemap, and robots into `out/` with 100% static HTML.

@@ -1,11 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { Header } from "@/components/ui/Header";
 import { Footer } from "@/components/ui/Footer";
 import { ImageCompressor } from "@/components/tools/ImageCompressor";
 import { JsonConverter } from "@/components/tools/JsonConverter";
 import { PrivacyScrubber } from "@/components/tools/PrivacyScrubber";
+import { EthicalAdCard } from "@/components/monetization/EthicalAdCard";
+import { ProModal } from "@/components/monetization/ProModal";
 import {
   Sparkles,
   Code2,
@@ -14,15 +17,21 @@ import {
   Lock,
   Cpu,
   CheckCircle,
+  ExternalLink,
 } from "lucide-react";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<string>("image");
+  const [isProModalOpen, setIsProModalOpen] = useState<boolean>(false);
 
   return (
     <div className="min-h-screen flex flex-col justify-between">
-      {/* Global Header */}
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+      {/* Global Header with Pro Modal Trigger */}
+      <Header
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onOpenProModal={() => setIsProModalOpen(true)}
+      />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Hero Privacy & Architecture Banner */}
@@ -91,9 +100,9 @@ export default function Home() {
 
         {/* Interactive Tool Selector Tabs */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button
+          <div
             onClick={() => setActiveTab("image")}
-            className={`p-4 rounded-2xl border text-left transition-all ${
+            className={`cursor-pointer p-4 rounded-2xl border text-left transition-all ${
               activeTab === "image"
                 ? "bg-white dark:bg-slate-900 border-blue-500 shadow-md shadow-blue-500/10 ring-1 ring-blue-500"
                 : "bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
@@ -103,19 +112,24 @@ export default function Home() {
               <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                 <Sparkles className="w-4 h-4" />
               </div>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                Canvas / Offscreen
-              </span>
+              <Link
+                href="/tools/image-compressor"
+                onClick={(e) => e.stopPropagation()}
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 flex items-center gap-1 transition-colors"
+              >
+                <span>Standalone Page</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </Link>
             </div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Image &amp; SVG Compressor</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
               Compress PNG/JPEG/WebP and optimize SVG vectors with dimensional limits.
             </p>
-          </button>
+          </div>
 
-          <button
+          <div
             onClick={() => setActiveTab("json")}
-            className={`p-4 rounded-2xl border text-left transition-all ${
+            className={`cursor-pointer p-4 rounded-2xl border text-left transition-all ${
               activeTab === "json"
                 ? "bg-white dark:bg-slate-900 border-indigo-500 shadow-md shadow-indigo-500/10 ring-1 ring-indigo-500"
                 : "bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
@@ -125,19 +139,24 @@ export default function Home() {
               <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
                 <Code2 className="w-4 h-4" />
               </div>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                Live Dual Pane
-              </span>
+              <Link
+                href="/tools/json-to-typescript"
+                onClick={(e) => e.stopPropagation()}
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 flex items-center gap-1 transition-colors"
+              >
+                <span>Standalone Page</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </Link>
             </div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">JSON → TypeScript &amp; Zod</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
               Converts raw JSON into nested TypeScript interfaces and Zod validation schemas.
             </p>
-          </button>
+          </div>
 
-          <button
+          <div
             onClick={() => setActiveTab("scrubber")}
-            className={`p-4 rounded-2xl border text-left transition-all ${
+            className={`cursor-pointer p-4 rounded-2xl border text-left transition-all ${
               activeTab === "scrubber"
                 ? "bg-white dark:bg-slate-900 border-emerald-500 shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500"
                 : "bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
@@ -147,15 +166,20 @@ export default function Home() {
               <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                 <ShieldCheck className="w-4 h-4" />
               </div>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                AI Prompt Safe
-              </span>
+              <Link
+                href="/tools/text-privacy-scrubber"
+                onClick={(e) => e.stopPropagation()}
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 flex items-center gap-1 transition-colors"
+              >
+                <span>Standalone Page</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </Link>
             </div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">Text Privacy Scrubber</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
               Strip API keys, secrets, emails, and IPs before sending prompts to external LLMs.
             </p>
-          </button>
+          </div>
         </section>
 
         {/* Active Tool Viewport */}
@@ -164,7 +188,16 @@ export default function Home() {
           {activeTab === "json" && <JsonConverter />}
           {activeTab === "scrubber" && <PrivacyScrubber />}
         </section>
+
+        {/* Ethical Ad Placement */}
+        <EthicalAdCard onOpenProModal={() => setIsProModalOpen(true)} />
       </main>
+
+      {/* Pro Modal */}
+      <ProModal
+        isOpen={isProModalOpen}
+        onClose={() => setIsProModalOpen(false)}
+      />
 
       {/* Global Footer */}
       <Footer />
