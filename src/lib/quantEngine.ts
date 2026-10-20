@@ -2,8 +2,12 @@ import {
   GAME_CONFIGS,
   GameConfig,
   GameType,
+  HistoricalDraw,
+  MEGA_645_SEED_DRAWS,
+  POWER_655_SEED_DRAWS,
 } from "@/data/empiricalSeed2026";
 import {
+  buildDynamicGameConfigForDate,
   calculateNetPayout,
   getPairwiseAffinityLift,
 } from "@/lib/vietlottData";
@@ -88,6 +92,9 @@ export interface DayScheduleForecast {
   gameType: GameType | "NO_MATRIX_DRAW";
   gameName: string;
   estimatedDrawId: string;
+  calibratedFromDrawId?: string;
+  calibratedFromDrawDate?: string;
+  settledActualDraw?: HistoricalDraw;
   cutoffTimeICT: string;
   broadcastWindowICT: string;
   seedHash: string;
@@ -445,7 +452,11 @@ export function passesCombinatorialSieve(
 export function generateDayForecast(
   targetDateStr: string, // YYYY-MM-DD
   seedSalt = 0,
-  attenuatedNumbers: Set<number> = new Set()
+  attenuatedNumbers: Set<number> = new Set(),
+  liveDraws?: {
+    powerDraws?: HistoricalDraw[];
+    megaDraws?: HistoricalDraw[];
+  }
 ): DayScheduleForecast {
   const dateObj = new Date(`${targetDateStr}T12:00:00+07:00`);
   const weekday = dateObj.toLocaleDateString("en-US", {
@@ -481,7 +492,19 @@ export function generateDayForecast(
   const isPowerDay =
     weekday === "Tuesday" || weekday === "Thursday" || weekday === "Saturday";
   const gameType: GameType = isPowerDay ? "6/55" : "6/45";
-  const cfg = GAME_CONFIGS[gameType];
+  const sourceDraws = isPowerDay
+    ? liveDraws?.powerDraws ?? POWER_655_SEED_DRAWS
+    : liveDraws?.megaDraws ?? MEGA_645_SEED_DRAWS;
+
+  // Dynamically calibrate GameConfig strictly from draws completed prior to targetDateStr
+  const cfg = buildDynamicGameConfigForDate(
+    gameType,
+    targetDateStr,
+    sourceDraws
+  );
+
+  // Check if targetDateStr itself already has a completed draw in the dataset (for retroactive backtest display)
+  const settledActualDraw = sourceDraws.find((d) => d.date === targetDateStr);
 
   // Calculate exact sequential draw ID from latest October 2026 draw date
   const latestAnchorDate = new Date(`${cfg.latestDrawDate}T12:00:00+07:00`);
@@ -837,7 +860,12 @@ export function generateDayForecast(
     isMondayRestDay: false,
     gameType,
     gameName: cfg.name,
-    estimatedDrawId,
+    estimatedDrawId: settledActualDraw
+      ? `#${settledActualDraw.id}`
+      : estimatedDrawId,
+    calibratedFromDrawId: `#${cfg.latestDrawId}`,
+    calibratedFromDrawDate: cfg.latestDrawDate,
+    settledActualDraw,
     cutoffTimeICT: cfg.cutoffTimeICT,
     broadcastWindowICT: cfg.broadcastWindowICT,
     seedHash,
@@ -869,7 +897,11 @@ export function addDaysISO(isoDate: string, daysToAdd: number): string {
 export function generateRollingSchedule(
   anchorDate: Date | string,
   daysCount = 8,
-  seedSalt = 0
+  seedSalt = 0,
+  liveDraws?: {
+    powerDraws?: HistoricalDraw[];
+    megaDraws?: HistoricalDraw[];
+  }
 ): RollingScheduleResult {
   const anchorIso =
     typeof anchorDate === "string"
@@ -909,7 +941,12 @@ export function generateRollingSchedule(
         ? prevPowerSelected
         : prevMegaSelected;
 
-    const dayForecast = generateDayForecast(targetIso, seedSalt, attenuatedSet);
+    const dayForecast = generateDayForecast(
+      targetIso,
+      seedSalt,
+      attenuatedSet,
+      liveDraws
+    );
     allHorizonDays.push(dayForecast);
 
     // Update Markov Virtual-Draw Propagation state for subsequent draw of same game

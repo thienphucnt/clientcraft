@@ -31,6 +31,8 @@ interface RollingForecastMatrixProps {
   onReRollSeed: () => void;
   onResetSeed: () => void;
   onInspectBallot: (ballot: GeneratedBallot) => void;
+  simulateDraw1413?: boolean;
+  onToggleSimulateDraw1413?: () => void;
 }
 
 export function RollingForecastMatrix({
@@ -41,6 +43,8 @@ export function RollingForecastMatrix({
   onReRollSeed,
   onResetSeed,
   onInspectBallot,
+  simulateDraw1413 = false,
+  onToggleSimulateDraw1413,
 }: RollingForecastMatrixProps) {
   const [viewMode, setViewMode] = useState<"WEEKLY_GRID" | "DAILY_DEEP_DIVE">(
     "WEEKLY_GRID"
@@ -152,6 +156,27 @@ export function RollingForecastMatrix({
               <Dices className="w-4 h-4" />
               <span>Re-Roll Seed</span>
             </button>
+
+            {onToggleSimulateDraw1413 && (
+              <button
+                type="button"
+                data-testid="simulate-draw1413-btn"
+                onClick={onToggleSimulateDraw1413}
+                title="Test how completing Tuesday's #01413 draw re-anchors the seed and re-synthesizes upcoming Thursday #01414 and Saturday #01415 ballots"
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer ${
+                  simulateDraw1413
+                    ? "bg-emerald-600 text-white border-emerald-500 shadow-sm"
+                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>
+                  {simulateDraw1413
+                    ? "✓ Simulating #01413 Settled (Re-Synthesized)"
+                    : "Sim #01413 Draw Settlement"}
+                </span>
+              </button>
+            )}
 
             {seedSalt !== 0 && (
               <button
@@ -481,9 +506,11 @@ export function RollingForecastMatrix({
                       </div>
                       <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 mt-1">
                         Broadcast: {day.broadcastWindowICT} ICT • Cutoff:{" "}
-                        {day.cutoffTimeICT} ICT • 70% Sum Corridor: [
-                        {cfg.corridor70[0]}, {cfg.corridor70[1]}] • Seed:{" "}
-                        {day.seedHash}
+                        {day.cutoffTimeICT} ICT • Calibrated from{" "}
+                        <strong className="text-slate-700 dark:text-slate-300">
+                          {day.calibratedFromDrawId}
+                        </strong>{" "}
+                        • Seed: {day.seedHash}
                       </div>
                     </div>
 
@@ -517,6 +544,30 @@ export function RollingForecastMatrix({
                       </button>
                     </div>
                   </div>
+
+                  {/* Optional Settled Actual Draw Banner when a day's draw has already completed */}
+                  {day.settledActualDraw && (
+                    <div className="px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between flex-wrap gap-2 text-xs font-mono">
+                      <span className="font-bold text-emerald-700 dark:text-emerald-300">
+                        ✓ Settled Draw #{day.settledActualDraw.id} Actual Result:
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {day.settledActualDraw.numbers.map((n) => (
+                          <span
+                            key={n}
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-600 text-white text-[11px] font-bold"
+                          >
+                            {String(n).padStart(2, "0")}
+                          </span>
+                        ))}
+                        {day.settledActualDraw.bonus !== undefined && (
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-400 text-slate-950 text-[11px] font-extrabold ml-1">
+                            {String(day.settledActualDraw.bonus).padStart(2, "0")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 5 Orthogonal Strategy Ballots */}
                   <div className="p-3 sm:p-4 space-y-2.5">

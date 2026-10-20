@@ -12,7 +12,14 @@ import {
   GeneratedBallot,
   generateRollingSchedule,
 } from "@/lib/quantEngine";
-import { SyncStatusResponse } from "@/lib/vietlottData";
+import {
+  getICTTelemetryClock,
+  HistoricalDraw,
+  MEGA_645_SEED_DRAWS,
+  parseNDJsonDraws,
+  POWER_655_SEED_DRAWS,
+  SyncStatusResponse,
+} from "@/lib/vietlottData";
 import {
   CalendarDays,
   SearchCheck,
@@ -24,10 +31,19 @@ export default function VietlottQuantMatrixDashboard() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [anchorDate, setAnchorDate] = useState<string>("2026-10-20");
   const [seedSalt, setSeedSalt] = useState<number>(0);
+  const [simulateDraw1413, setSimulateDraw1413] = useState<boolean>(false);
   const [inspectedBallot, setInspectedBallot] =
     useState<GeneratedBallot | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  // Sync live ICT calendar date on mount so the rolling window advances automatically day-by-day
+  useEffect(() => {
+    const liveClock = getICTTelemetryClock(new Date());
+    if (liveClock.isoDate) {
+      setAnchorDate(liveClock.isoDate);
+    }
+  }, []);
 
   // Sync theme with document.documentElement class
   useEffect(() => {
@@ -67,20 +83,35 @@ export default function VietlottQuantMatrixDashboard() {
           const [pText, mText] = await Promise.all([pRes.text(), mRes.text()]);
           const pLines = pText.split(/\r?\n/).filter((l) => l.trim().length > 0).length;
           const mLines = mText.split(/\r?\n/).filter((l) => l.trim().length > 0).length;
-          const {
-            MEGA_645_SEED_DRAWS,
-            POWER_655_SEED_DRAWS,
-            GITHUB_NDJSON_URLS,
-          } = await import("@/lib/vietlottData");
+          const parsedPower = parseNDJsonDraws(pText, "6/55", 150);
+          const parsedMega = parseNDJsonDraws(mText, "6/45", 150);
+
+          const powerMap = new Map(POWER_655_SEED_DRAWS.map((d) => [d.id, d]));
+          for (const d of parsedPower) {
+            if (!powerMap.has(d.id)) powerMap.set(d.id, d);
+          }
+          const mergedPower = Array.from(powerMap.values()).sort((a, b) =>
+            b.date.localeCompare(a.date)
+          );
+
+          const megaMap = new Map(MEGA_645_SEED_DRAWS.map((d) => [d.id, d]));
+          for (const d of parsedMega) {
+            if (!megaMap.has(d.id)) megaMap.set(d.id, d);
+          }
+          const mergedMega = Array.from(megaMap.values()).sort((a, b) =>
+            b.date.localeCompare(a.date)
+          );
+
+          const { GITHUB_NDJSON_URLS } = await import("@/lib/vietlottData");
           setSyncStatus({
             tier: "TIER_1_LIVE_CLOUD_HYBRID",
             syncedAt: new Date().toISOString(),
             power655TotalDraws: Math.max(1412, pLines),
             mega645TotalDraws: Math.max(1577, mLines),
-            latestPowerDraw: POWER_655_SEED_DRAWS[0],
-            latestMegaDraw: MEGA_645_SEED_DRAWS[0],
-            powerDraws: POWER_655_SEED_DRAWS,
-            megaDraws: MEGA_645_SEED_DRAWS,
+            latestPowerDraw: mergedPower[0] || POWER_655_SEED_DRAWS[0],
+            latestMegaDraw: mergedMega[0] || MEGA_645_SEED_DRAWS[0],
+            powerDraws: mergedPower,
+            megaDraws: mergedMega,
             sourceUrlPower: GITHUB_NDJSON_URLS.power655,
             sourceUrlMega: GITHUB_NDJSON_URLS.mega645,
             message: `Tier 1 Cloud NDJSON Sync Active (${pLines} Power 6/55 & ${mLines} Mega 6/45 records ingested + Oct 2026 calibration).`,
@@ -99,10 +130,38 @@ export default function VietlottQuantMatrixDashboard() {
     triggerCloudSync();
   }, [triggerCloudSync]);
 
-  // Generate deterministic 7-to-8 day rolling schedule
+  // Generate deterministic 7-to-8 day rolling schedule, dynamically re-synthesizing as new draws settle
   const rollingSchedule = useMemo(() => {
-    return generateRollingSchedule(anchorDate, 8, seedSalt);
-  }, [anchorDate, seedSalt]);
+    const basePower = syncStatus?.powerDraws ?? POWER_655_SEED_DRAWS;
+    const baseMega = syncStatus?.megaDraws ?? MEGA_645_SEED_DRAWS;
+
+    const effectivePowerDraws: HistoricalDraw[] = simulateDraw1413
+      ? [
+          {
+            id: "01413",
+            date: "2026-10-20",
+            weekday: "Tuesday",
+            gameType: "6/55",
+            numbers: [6, 13, 21, 36, 41, 52],
+            bonus: 22,
+            sum: 169,
+            oddEven: "3O-3E",
+            lowHigh: "3L-3H",
+            consecPairs: 0,
+            jackpot1Vnd: 171_500_000_000,
+            jackpot2Vnd: 4_150_000_000,
+            jp1Winners: 0,
+            jp2Winners: 0,
+          },
+          ...basePower,
+        ]
+      : basePower;
+
+    return generateRollingSchedule(anchorDate, 8, seedSalt, {
+      powerDraws: effectivePowerDraws,
+      megaDraws: baseMega,
+    });
+  }, [anchorDate, seedSalt, syncStatus, simulateDraw1413]);
 
   const handleInspectBallot = useCallback((ballot: GeneratedBallot) => {
     setInspectedBallot(ballot);
@@ -172,6 +231,8 @@ export default function VietlottQuantMatrixDashboard() {
             onReRollSeed={() => setSeedSalt((s) => s + 1)}
             onResetSeed={() => setSeedSalt(0)}
             onInspectBallot={handleInspectBallot}
+            simulateDraw1413={simulateDraw1413}
+            onToggleSimulateDraw1413={() => setSimulateDraw1413((prev) => !prev)}
           />
         </div>
 

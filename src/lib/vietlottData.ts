@@ -529,6 +529,108 @@ export function getICTTelemetryClock(now: Date = new Date()) {
   };
 }
 
+/**
+ * Dynamically recalibrate GameConfig for a target date using all completed draws strictly prior to targetDateStr.
+ * Whenever a new draw completes (after 18:30 ICT) and is synced from Tier 1 Cloud NDJSON or added by the user,
+ * this function updates latestDrawId, recentDrawsTop2 (Gate 6), hotPool/hotWeights (Momentum), and coldOverduePool (Skip-Gap),
+ * automatically re-synthesizing upcoming predictions day-by-day.
+ */
+export function buildDynamicGameConfigForDate(
+  gameType: GameType,
+  targetDateStr: string,
+  liveDraws?: HistoricalDraw[]
+): GameConfig {
+  const baseCfg = GAME_CONFIGS[gameType];
+  const seedDraws =
+    gameType === "6/55" ? POWER_655_SEED_DRAWS : MEGA_645_SEED_DRAWS;
+  const sourceDraws =
+    liveDraws && liveDraws.length > 0 ? liveDraws : seedDraws;
+
+  // Filter strictly causal completed draws before targetDateStr (sorted newest-first)
+  const priorDraws = [...sourceDraws]
+    .filter((d) => d.date < targetDateStr)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  if (priorDraws.length === 0) {
+    return baseCfg;
+  }
+
+  const newestDraw = priorDraws[0];
+  const secondDraw = priorDraws[1] ?? priorDraws[0];
+
+  // If newestDraw matches the canonical October 2026 baseline (#01412 or #01577), keep exact calibrated pools
+  if (newestDraw.id === baseCfg.latestDrawId && priorDraws.length <= seedDraws.length) {
+    return {
+      ...baseCfg,
+      latestDrawId: newestDraw.id,
+      latestDrawDate: newestDraw.date,
+      recentDrawsTop2: [newestDraw.numbers, secondDraw.numbers],
+    };
+  }
+
+  // Otherwise dynamically recompute Multi-Horizon Momentum & Skip-Gap Hazard across priorDraws!
+  const maxNum = baseCfg.maxNum;
+  const ballScores: Array<{
+    ball: number;
+    momentumWeight: number;
+    hazardScore: number;
+  }> = [];
+
+  for (let b = 1; b <= maxNum; b++) {
+    const countInWindow = (w: number) =>
+      priorDraws
+        .slice(0, w)
+        .filter((d) => d.numbers.includes(b)).length;
+
+    const hits = {
+      w10: countInWindow(10),
+      w20: countInWindow(20),
+      w50: countInWindow(50),
+      w100: countInWindow(100),
+      w150: countInWindow(150),
+    };
+
+    // Find current skip streak g_i
+    let skipGap = priorDraws.length;
+    for (let idx = 0; idx < priorDraws.length; idx++) {
+      if (priorDraws[idx].numbers.includes(b)) {
+        skipGap = idx;
+        break;
+      }
+    }
+
+    const mZ = computeMomentumScore(hits, maxNum);
+    const rScore = computeSurvivalHazardScore(skipGap, maxNum);
+    const baseIdx = baseCfg.hotPool.indexOf(b);
+    const priorWeight =
+      baseIdx >= 0 ? baseCfg.hotWeights[baseIdx] : gameType === "6/55" ? 154 : 20;
+
+    ballScores.push({
+      ball: b,
+      momentumWeight: Math.max(10, Math.round(priorWeight + mZ * 12)),
+      hazardScore: rScore + (skipGap >= 6 ? 0.25 : 0),
+    });
+  }
+
+  const sortedHot = [...ballScores]
+    .sort((a, b) => b.momentumWeight - a.momentumWeight)
+    .slice(0, 22);
+  const sortedCold = [...ballScores]
+    .sort((a, b) => b.hazardScore - a.hazardScore)
+    .slice(0, 12);
+
+  return {
+    ...baseCfg,
+    latestDrawId: newestDraw.id,
+    latestDrawDate: newestDraw.date,
+    nextDrawId: String(Number(newestDraw.id) + 1).padStart(5, "0"),
+    hotPool: sortedHot.map((x) => x.ball),
+    hotWeights: sortedHot.map((x) => x.momentumWeight),
+    coldOverduePool: sortedCold.map((x) => x.ball),
+    recentDrawsTop2: [newestDraw.numbers, secondDraw.numbers],
+  };
+}
+
 export {
   GAME_CONFIGS,
   POWER_655_SEED_DRAWS,
