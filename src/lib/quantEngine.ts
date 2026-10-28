@@ -235,9 +235,11 @@ export function inspectCombinatorialSieve(
   options?: {
     allowWideSum?: boolean;
     allowHighSkew?: boolean;
+    customConfig?: GameConfig;
+    customDraws?: HistoricalDraw[];
   }
 ): SieveInspectionReport {
-  const cfg: GameConfig = GAME_CONFIGS[gameType];
+  const cfg: GameConfig = options?.customConfig ?? GAME_CONFIGS[gameType];
   const sc = [...combo].sort((a, b) => a - b);
 
   const uniqueSet = new Set(sc);
@@ -320,7 +322,13 @@ export function inspectCombinatorialSieve(
   let pairCount = 0;
   for (let i = 0; i < sc.length; i++) {
     for (let j = i + 1; j < sc.length; j++) {
-      pairLiftSum += getPairwiseAffinityLift(sc[i], sc[j], gameType);
+      pairLiftSum += getPairwiseAffinityLift(
+        sc[i],
+        sc[j],
+        gameType,
+        options?.customDraws,
+        cfg
+      );
       pairCount++;
     }
   }
@@ -441,6 +449,8 @@ export function passesCombinatorialSieve(
   options?: {
     allowWideSum?: boolean;
     allowHighSkew?: boolean;
+    customConfig?: GameConfig;
+    customDraws?: HistoricalDraw[];
   }
 ): boolean {
   return inspectCombinatorialSieve(combo, gameType, options).passedAllGates;
@@ -556,6 +566,11 @@ export function generateDayForecast(
     return attenuatedNumbers.has(ball) ? baseW * 0.88 : baseW;
   });
 
+  const sieveOpts = {
+    customConfig: cfg,
+    customDraws: sourceDraws,
+  };
+
   const buildBallotObject = (
     slot: 1 | 2 | 3 | 4 | 5,
     strategyCode: StrategyCode,
@@ -566,6 +581,7 @@ export function generateDayForecast(
   ): GeneratedBallot => {
     const sc = [...nums].sort((a, b) => a - b);
     const report = inspectCombinatorialSieve(sc, gameType, {
+      ...sieveOpts,
       allowWideSum: slot === 5,
     });
 
@@ -619,9 +635,9 @@ export function generateDayForecast(
     const sig = cand.join(",");
     if (
       !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType)
+      passesCombinatorialSieve(cand, gameType, sieveOpts)
     ) {
-      const rep = inspectCombinatorialSieve(cand, gameType);
+      const rep = inspectCombinatorialSieve(cand, gameType, sieveOpts);
       if (rep.affinityLiftScore > bestSlot1Lift) {
         bestSlot1Lift = rep.affinityLiftScore;
         bestSlot1 = cand;
@@ -635,7 +651,7 @@ export function generateDayForecast(
       const cand = rng
         .sampleWithoutReplacement(allNums, 6)
         .sort((a, b) => a - b);
-      if (passesCombinatorialSieve(cand, gameType)) {
+      if (passesCombinatorialSieve(cand, gameType, sieveOpts)) {
         bestSlot1 = cand;
         break;
       }
@@ -667,7 +683,7 @@ export function generateDayForecast(
     const sig = cand.join(",");
     if (
       !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType)
+      passesCombinatorialSieve(cand, gameType, sieveOpts)
     ) {
       slot2Nums = cand;
       break;
@@ -711,7 +727,7 @@ export function generateDayForecast(
       cand[5] <= cfg.maxNum &&
       spread >= cfg.minDeltaSpread &&
       !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType)
+      passesCombinatorialSieve(cand, gameType, sieveOpts)
     ) {
       slot3Nums = cand;
       break;
@@ -728,7 +744,7 @@ export function generateDayForecast(
         cand[0] <= 6 &&
         cand[5] - cand[0] >= cfg.minDeltaSpread &&
         !usedSignatures.has(sig) &&
-        passesCombinatorialSieve(cand, gameType)
+        passesCombinatorialSieve(cand, gameType, sieveOpts)
       ) {
         slot3Nums = cand;
         break;
@@ -782,7 +798,7 @@ export function generateDayForecast(
       sum >= cfg.goldenCorridor[0] &&
       sum <= cfg.goldenCorridor[1] &&
       !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType)
+      passesCombinatorialSieve(cand, gameType, sieveOpts)
     ) {
       slot4Nums = cand;
       break;
@@ -817,7 +833,10 @@ export function generateDayForecast(
     const sig = cand.join(",");
     if (
       !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType, { allowWideSum: false })
+      passesCombinatorialSieve(cand, gameType, {
+        ...sieveOpts,
+        allowWideSum: false,
+      })
     ) {
       slot5Nums = cand;
       break;
@@ -832,7 +851,10 @@ export function generateDayForecast(
       const sig = cand.join(",");
       if (
         !usedSignatures.has(sig) &&
-        passesCombinatorialSieve(cand, gameType, { allowWideSum: true })
+        passesCombinatorialSieve(cand, gameType, {
+          ...sieveOpts,
+          allowWideSum: true,
+        })
       ) {
         slot5Nums = cand;
         break;

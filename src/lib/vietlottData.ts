@@ -19,6 +19,15 @@ export interface RawNDJsonRecord {
   process_time?: string;
 }
 
+export interface LiveJackpotScrapeResult {
+  gameType: GameType;
+  drawId?: string;
+  jackpot1Vnd?: number;
+  jackpot2Vnd?: number;
+  jp1Winners?: number;
+  jp2Winners?: number;
+}
+
 export interface SyncStatusResponse {
   tier: "TIER_1_LIVE_CLOUD_HYBRID" | "TIER_2_OFFLINE_SEED_2026";
   syncedAt: string;
@@ -42,6 +51,10 @@ export const GITHUB_NDJSON_URLS = {
     "https://raw.githubusercontent.com/vietvudanh/vietlott-data/main/data/power645.jsonl",
   mega645Alt:
     "https://raw.githubusercontent.com/vietvudanh/vietlott-data/main/data/mega_645.ndjson",
+  minhNgocPower655:
+    "https://www.minhngoc.net.vn/ket-qua-xo-so/dien-toan-vietlott/power-6x55.html",
+  minhNgocMega645:
+    "https://www.minhngoc.net.vn/ket-qua-xo-so/dien-toan-vietlott/mega-6x45.html",
 };
 
 /**
@@ -72,7 +85,7 @@ export function calculateNetPayout(grossPrizeVnd: number): {
 }
 
 /**
- * Format VND currency in full or compact Billions ("Tỷ VND") / Millions ("Tr VND")
+ * Format VND currency in full or compact Billions ("B VND") / Millions ("M VND")
  */
 export function formatVND(amount: number, compact = false): string {
   if (compact) {
@@ -136,13 +149,91 @@ export function computeSurvivalHazardScore(
 }
 
 /**
- * Generate full 45-ball or 55-ball telemetry dataset combining Tier 2 verified leaders
- * and complete deterministic baseline for remaining balls.
+ * Generate full 45-ball or 55-ball telemetry dataset.
+ * When `customDraws` contains >= 150 draws (from live synced NDJSON), computes 100% live
+ * empirical W10, W20, W50, W100, W150, All-Time hits, and Lô Gan skip-gap streaks directly
+ * from the draw stream. Otherwise falls back to Tier 2 October 2026 calibrated leaders.
  */
-export function getFullBallTelemetry(gameType: GameType): BallTelemetryStat[] {
+export function getFullBallTelemetry(
+  gameType: GameType,
+  customDraws?: HistoricalDraw[]
+): BallTelemetryStat[] {
   const cfg = GAME_CONFIGS[gameType];
   const maxNum = cfg.maxNum;
   const stats: BallTelemetryStat[] = [];
+
+  if (customDraws && customDraws.length >= 150) {
+    const sortedDraws = [...customDraws].sort((a, b) =>
+      b.date.localeCompare(a.date)
+    );
+    const totalDraws = sortedDraws.length;
+
+    for (let b = 1; b <= maxNum; b++) {
+      let hitsW10 = 0;
+      let hitsW20 = 0;
+      let hitsW50 = 0;
+      let hitsW100 = 0;
+      let hitsW150 = 0;
+      let hitsAllTime = 0;
+      let skipGap = totalDraws;
+      let foundFirst = false;
+
+      for (let idx = 0; idx < totalDraws; idx++) {
+        const hit = sortedDraws[idx].numbers.includes(b);
+        if (hit) {
+          hitsAllTime++;
+          if (idx < 10) hitsW10++;
+          if (idx < 20) hitsW20++;
+          if (idx < 50) hitsW50++;
+          if (idx < 100) hitsW100++;
+          if (idx < 150) hitsW150++;
+          if (!foundFirst) {
+            skipGap = idx;
+            foundFirst = true;
+          }
+        }
+      }
+
+      const momentumZ = computeMomentumScore(
+        {
+          w10: hitsW10,
+          w20: hitsW20,
+          w50: hitsW50,
+          w100: hitsW100,
+          w150: hitsW150,
+        },
+        maxNum
+      );
+      const hazardScore = computeSurvivalHazardScore(skipGap, maxNum);
+      const overdueCutoff = gameType === "6/55" ? 13 : 11;
+      const regime: BallTelemetryStat["regime"] =
+        skipGap >= overdueCutoff
+          ? "OVERDUE"
+          : momentumZ >= 0.65
+          ? "HOT"
+          : momentumZ <= -0.65
+          ? "COLD"
+          : "NEUTRAL";
+
+      stats.push({
+        ball: b,
+        gameType,
+        hitsW10,
+        hitsW20,
+        hitsW50,
+        hitsW100,
+        hitsW150,
+        hitsAllTime,
+        skipGap,
+        momentumZ,
+        hazardScore,
+        regime,
+        note: `Live #${sortedDraws[0]?.id}: ${hitsAllTime} all-time • ${hitsW150} in 150d • Skip=${skipGap}`,
+      });
+    }
+
+    return stats;
+  }
 
   if (gameType === "6/55") {
     const leaderMap = new Map(
@@ -179,7 +270,6 @@ export function getFullBallTelemetry(gameType: GameType): BallTelemetryStat[] {
           note: known.note,
         });
       } else {
-        // Deterministic baseline around theoretical expectation (1412 * 6 / 55 = 154.04)
         const pseudoOffset = ((b * 17 + 13) % 19) - 9;
         const hitsAllTime = 154 + pseudoOffset;
         const hitsW150 = Math.max(11, Math.min(21, 16 + ((b * 7) % 5) - 2));
@@ -250,8 +340,7 @@ export function getFullBallTelemetry(gameType: GameType): BallTelemetryStat[] {
           note: known.note,
         });
       } else {
-        // Theoretical 150-draw expectation = 20.00
-        const hitsW150 = 18 + ((b * 5) % 4); // 18..21 neutral band
+        const hitsW150 = 18 + ((b * 5) % 4);
         const hitsW100 = Math.round(hitsW150 * 0.67);
         const hitsW50 = Math.round(hitsW150 * 0.33);
         const hitsW20 = Math.round(hitsW150 * 0.13);
@@ -292,18 +381,24 @@ export function getFullBallTelemetry(gameType: GameType): BallTelemetryStat[] {
 
 /**
  * Generate Laplace-smoothed Pairwise Co-Occurrence Lift L_{i,j} between two balls
+ * Dynamically uses `customDraws` (most recent 150 draws) and `customConfig` when supplied.
  */
 export function getPairwiseAffinityLift(
   ballA: number,
   ballB: number,
-  gameType: GameType
+  gameType: GameType,
+  customDraws?: HistoricalDraw[],
+  customConfig?: GameConfig
 ): number {
   if (ballA === ballB) return 1.0;
   const i = Math.min(ballA, ballB);
   const j = Math.max(ballA, ballB);
-  const draws =
+  const fallbackDraws =
     gameType === "6/55" ? POWER_655_SEED_DRAWS : MEGA_645_SEED_DRAWS;
-  const cfg = GAME_CONFIGS[gameType];
+  const rawDraws =
+    customDraws && customDraws.length > 0 ? customDraws : fallbackDraws;
+  const draws = rawDraws.slice(0, 150);
+  const cfg = customConfig ?? GAME_CONFIGS[gameType];
 
   let coCount = 0;
   for (const d of draws) {
@@ -364,12 +459,60 @@ export function generateGaussianBellCurveData() {
 }
 
 /**
- * Parse raw NDJSON string from vietvudanh/vietlott-data into HistoricalDraw items
+ * Parse live Minh Ngoc Vietlott HTML page for the latest Jackpot VND amounts and winner counts
+ */
+export function parseMinhNgocJackpots(
+  html: string,
+  gameType: GameType
+): LiveJackpotScrapeResult {
+  const parseDigits = (raw?: string): number | undefined => {
+    if (!raw) return undefined;
+    const digits = raw.replace(/[^0-9]/g, "");
+    if (!digits) return undefined;
+    const val = Number(digits);
+    return Number.isFinite(val) && val > 0 ? val : undefined;
+  };
+
+  if (gameType === "6/55") {
+    const idMatch = html.match(/id="DT6X55_KY_VE"[^>]*>\s*#?(\d+)/i);
+    const jp1Match = html.match(/id="DT6X55_G_JACKPOT"[^>]*>\s*([0-9.,]+)/i);
+    const jp2Match = html.match(/id="DT6X55_G_JACKPOT2"[^>]*>\s*([0-9.,]+)/i);
+    const w1Match = html.match(/id="DT6X55_S_JACKPOT"[^>]*>\s*(\d+)/i);
+    const w2Match = html.match(/id="DT6X55_S_JACKPOT2"[^>]*>\s*(\d+)/i);
+
+    return {
+      gameType,
+      drawId: idMatch?.[1] ? String(idMatch[1]).padStart(5, "0") : undefined,
+      jackpot1Vnd: parseDigits(jp1Match?.[1]),
+      jackpot2Vnd: parseDigits(jp2Match?.[1]),
+      jp1Winners: w1Match?.[1] !== undefined ? Number(w1Match[1]) : undefined,
+      jp2Winners: w2Match?.[1] !== undefined ? Number(w2Match[1]) : undefined,
+    };
+  } else {
+    const idMatch = html.match(/id="DT6X45_KY_VE"[^>]*>\s*#?(\d+)/i);
+    const jp1Match = html.match(/id="DT6X45_G_JACKPOT"[^>]*>\s*([0-9.,]+)/i);
+    const w1Match = html.match(/id="DT6X45_S_JACKPOT"[^>]*>\s*(\d+)/i);
+
+    return {
+      gameType,
+      drawId: idMatch?.[1] ? String(idMatch[1]).padStart(5, "0") : undefined,
+      jackpot1Vnd: parseDigits(jp1Match?.[1]),
+      jp1Winners: w1Match?.[1] !== undefined ? Number(w1Match[1]) : undefined,
+    };
+  }
+}
+
+/**
+ * Parse raw NDJSON string from vietvudanh/vietlott-data into HistoricalDraw items.
+ * Defaults to parsing up to 2500 lines (entire 2016–2026+ history) and enriches known draws
+ * with verified jackpot pools and winner counts, while estimating progressive rollover jackpots
+ * for any newly arrived draws beyond the seed table.
  */
 export function parseNDJsonDraws(
   ndjsonText: string,
   gameType: GameType,
-  limit = 25
+  limit = 2500,
+  liveJackpotOverride?: LiveJackpotScrapeResult
 ): HistoricalDraw[] {
   const lines = ndjsonText
     .split(/\r?\n/)
@@ -377,12 +520,22 @@ export function parseNDJsonDraws(
     .filter(Boolean);
   const recentLines = lines.slice(-limit);
   const mid = gameType === "6/55" ? 27 : 22;
-  const parsed: HistoricalDraw[] = [];
+  const seedDraws =
+    gameType === "6/55" ? POWER_655_SEED_DRAWS : MEGA_645_SEED_DRAWS;
+  const seedMap = new Map(seedDraws.map((d) => [d.id, d]));
+
+  const parsedChronological: HistoricalDraw[] = [];
+  let rollingJp1 =
+    gameType === "6/55" ? 31_758_267_450 : 16_103_186_000;
+  let rollingJp2 = gameType === "6/55" ? 4_432_627_250 : undefined;
 
   for (const line of recentLines) {
     try {
       const obj = JSON.parse(line);
       if (!obj || !Array.isArray(obj.result) || obj.result.length < 6) continue;
+      const drawId = String(obj.id).padStart(5, "0");
+      const knownSeed = seedMap.get(drawId);
+
       const rawNums = obj.result.map((n: string | number) => Number(n));
       const mainNums = rawNums.slice(0, 6).sort((a: number, b: number) => a - b);
       const bonus =
@@ -391,8 +544,14 @@ export function parseNDJsonDraws(
       const odds = mainNums.filter((n: number) => n % 2 !== 0).length;
       const lows = mainNums.filter((n: number) => n <= mid).length;
       let consecPairs = 0;
+      const consecList: string[] = [];
       for (let i = 0; i < 5; i++) {
-        if (mainNums[i + 1] - mainNums[i] === 1) consecPairs++;
+        if (mainNums[i + 1] - mainNums[i] === 1) {
+          consecPairs++;
+          consecList.push(
+            `${String(mainNums[i]).padStart(2, "0")}-${String(mainNums[i + 1]).padStart(2, "0")}`
+          );
+        }
       }
 
       const dObj = new Date(`${obj.date}T00:00:00+07:00`);
@@ -401,8 +560,63 @@ export function parseNDJsonDraws(
         timeZone: "Asia/Ho_Chi_Minh",
       });
 
-      parsed.push({
-        id: String(obj.id).padStart(5, "0"),
+      let jackpot1Vnd = knownSeed?.jackpot1Vnd;
+      let jackpot2Vnd = knownSeed?.jackpot2Vnd;
+      let jp1Winners = knownSeed?.jp1Winners ?? 0;
+      let jp2Winners = knownSeed?.jp2Winners ?? 0;
+      let isJackpotWon = knownSeed?.isJackpotWon;
+
+      if (jackpot1Vnd !== undefined) {
+        // Update rolling state from verified seed draw
+        rollingJp1 =
+          jp1Winners > 0
+            ? gameType === "6/55"
+              ? 30_000_000_000
+              : 12_000_000_000
+            : jackpot1Vnd;
+        if (gameType === "6/55") {
+          rollingJp2 =
+            jp2Winners > 0
+              ? 3_000_000_000
+              : jackpot2Vnd ?? 3_500_000_000;
+        }
+      } else {
+        // Estimate progressive rollover for draws newer than the seed table
+        if (Number(drawId) > Number(seedDraws[0]?.id ?? "0")) {
+          rollingJp1 += gameType === "6/55" ? 9_800_000_000 : 2_350_000_000;
+          if (gameType === "6/55" && rollingJp2 !== undefined) {
+            rollingJp2 += 650_000_000;
+          }
+          jackpot1Vnd = rollingJp1;
+          jackpot2Vnd = rollingJp2;
+        } else {
+          jackpot1Vnd =
+            gameType === "6/55" ? 55_000_000_000 : 20_000_000_000;
+          jackpot2Vnd = gameType === "6/55" ? 3_500_000_000 : undefined;
+        }
+      }
+
+      // Apply live scraped jackpot override if matching drawId
+      if (
+        liveJackpotOverride &&
+        liveJackpotOverride.drawId === drawId &&
+        liveJackpotOverride.jackpot1Vnd
+      ) {
+        jackpot1Vnd = liveJackpotOverride.jackpot1Vnd;
+        if (liveJackpotOverride.jackpot2Vnd) {
+          jackpot2Vnd = liveJackpotOverride.jackpot2Vnd;
+        }
+        if (liveJackpotOverride.jp1Winners !== undefined) {
+          jp1Winners = liveJackpotOverride.jp1Winners;
+          isJackpotWon = jp1Winners > 0;
+        }
+        if (liveJackpotOverride.jp2Winners !== undefined) {
+          jp2Winners = liveJackpotOverride.jp2Winners;
+        }
+      }
+
+      parsedChronological.push({
+        id: drawId,
         date: String(obj.date),
         weekday,
         gameType,
@@ -412,17 +626,44 @@ export function parseNDJsonDraws(
         oddEven: `${odds}O-${6 - odds}E`,
         lowHigh: `${lows}L-${6 - lows}H`,
         consecPairs,
-        jackpot1Vnd:
-          gameType === "6/55" ? 164_048_997_900 : 26_444_954_000,
-        jackpot2Vnd: gameType === "6/55" ? 3_816_405_550 : undefined,
-        jp1Winners: 0,
-        jp2Winners: 0,
+        consecDetail: consecList.length > 0 ? consecList.join(", ") : undefined,
+        jackpot1Vnd,
+        jackpot2Vnd,
+        jp1Winners,
+        jp2Winners,
+        isJackpotWon,
       });
     } catch {
       // Ignore malformed line
     }
   }
-  return parsed.reverse();
+
+  // If liveJackpotOverride is for the latest draw in parsedChronological (even if drawId wasn't matched)
+  if (
+    parsedChronological.length > 0 &&
+    liveJackpotOverride &&
+    liveJackpotOverride.jackpot1Vnd
+  ) {
+    const newest = parsedChronological[parsedChronological.length - 1];
+    if (
+      !liveJackpotOverride.drawId ||
+      liveJackpotOverride.drawId === newest.id
+    ) {
+      newest.jackpot1Vnd = liveJackpotOverride.jackpot1Vnd;
+      if (liveJackpotOverride.jackpot2Vnd) {
+        newest.jackpot2Vnd = liveJackpotOverride.jackpot2Vnd;
+      }
+      if (liveJackpotOverride.jp1Winners !== undefined) {
+        newest.jp1Winners = liveJackpotOverride.jp1Winners;
+        newest.isJackpotWon = liveJackpotOverride.jp1Winners > 0;
+      }
+      if (liveJackpotOverride.jp2Winners !== undefined) {
+        newest.jp2Winners = liveJackpotOverride.jp2Winners;
+      }
+    }
+  }
+
+  return parsedChronological.reverse();
 }
 
 /**
@@ -485,7 +726,6 @@ export function getICTTelemetryClock(now: Date = new Date()) {
 
   if (isMonday) {
     phase = "REST_DAY_MONDAY";
-    // Next cutoff is Tuesday 17:30 ICT
     secondsToCutoff = 24 * 3600 - currentSec + cutoffSec;
     secondsToDraw = 24 * 3600 - currentSec + drawStartSec;
   } else if (currentSec < cutoffSec) {
@@ -502,7 +742,6 @@ export function getICTTelemetryClock(now: Date = new Date()) {
     secondsToDraw = 0;
   } else {
     phase = "POST_DRAW_SETTLED";
-    // Next active day (if Sunday after 18:30, next active matrix draw is Tuesday 17:30!)
     const extraDays = weekday === "Sunday" ? 2 : 1;
     secondsToCutoff = extraDays * 24 * 3600 - currentSec + cutoffSec;
     secondsToDraw = extraDays * 24 * 3600 - currentSec + drawStartSec;
@@ -532,7 +771,8 @@ export function getICTTelemetryClock(now: Date = new Date()) {
 /**
  * Dynamically recalibrate GameConfig for a target date using all completed draws strictly prior to targetDateStr.
  * Whenever a new draw completes (after 18:30 ICT) and is synced from Tier 1 Cloud NDJSON or added by the user,
- * this function updates latestDrawId, recentDrawsTop2 (Gate 6), hotPool/hotWeights (Momentum), and coldOverduePool (Skip-Gap),
+ * this function updates latestDrawId, nextDrawId, currentJackpot1Vnd, currentJackpot2Vnd, seedMultiplier,
+ * recentDrawsTop2 (Gate 6), hotPool/hotWeights (Momentum), and coldOverduePool (Skip-Gap),
  * automatically re-synthesizing upcoming predictions day-by-day.
  */
 export function buildDynamicGameConfigForDate(
@@ -558,23 +798,46 @@ export function buildDynamicGameConfigForDate(
   const newestDraw = priorDraws[0];
   const secondDraw = priorDraws[1] ?? priorDraws[0];
 
-  // If newestDraw matches the canonical October 2026 baseline (#01412 or #01577), keep exact calibrated pools
-  if (newestDraw.id === baseCfg.latestDrawId && priorDraws.length <= seedDraws.length) {
-    return {
-      ...baseCfg,
-      latestDrawId: newestDraw.id,
-      latestDrawDate: newestDraw.date,
-      recentDrawsTop2: [newestDraw.numbers, secondDraw.numbers],
-    };
+  // Compute live currentJackpot1Vnd and currentJackpot2Vnd from newestDraw
+  // Note: if newestDraw had a Jackpot 1 winner and we are looking at the state AFTER newestDraw,
+  // check if newestDraw.jackpot1Vnd was the winning pool (e.g. >50B with jp1Winners > 0), in which case
+  // the next draw starts from the minimum seed.
+  let currentJackpot1Vnd = newestDraw.jackpot1Vnd || baseCfg.currentJackpot1Vnd;
+  if (
+    newestDraw.jp1Winners &&
+    newestDraw.jp1Winners > 0 &&
+    currentJackpot1Vnd > baseCfg.minJackpot1Vnd * 1.3
+  ) {
+    currentJackpot1Vnd = baseCfg.minJackpot1Vnd;
   }
 
-  // Otherwise dynamically recompute Multi-Horizon Momentum & Skip-Gap Hazard across priorDraws!
+  let currentJackpot2Vnd =
+    gameType === "6/55"
+      ? newestDraw.jackpot2Vnd ?? baseCfg.currentJackpot2Vnd ?? 3_000_000_000
+      : undefined;
+  if (
+    gameType === "6/55" &&
+    newestDraw.jp2Winners &&
+    newestDraw.jp2Winners > 0 &&
+    currentJackpot2Vnd &&
+    currentJackpot2Vnd > 3_500_000_000
+  ) {
+    currentJackpot2Vnd = 3_000_000_000;
+  }
+
+  const seedMultiplier = Number(
+    (currentJackpot1Vnd / baseCfg.minJackpot1Vnd).toFixed(2)
+  );
+
+  // Dynamically recompute Multi-Horizon Momentum & Skip-Gap Hazard across priorDraws
   const maxNum = baseCfg.maxNum;
   const ballScores: Array<{
     ball: number;
     momentumWeight: number;
     hazardScore: number;
   }> = [];
+
+  const hasFullHistory = priorDraws.length >= 150;
 
   for (let b = 1; b <= maxNum; b++) {
     const countInWindow = (w: number) =>
@@ -602,21 +865,28 @@ export function buildDynamicGameConfigForDate(
     const mZ = computeMomentumScore(hits, maxNum);
     const rScore = computeSurvivalHazardScore(skipGap, maxNum);
     const baseIdx = baseCfg.hotPool.indexOf(b);
-    const priorWeight =
-      baseIdx >= 0 ? baseCfg.hotWeights[baseIdx] : gameType === "6/55" ? 154 : 20;
+    const priorWeight = hasFullHistory
+      ? gameType === "6/55"
+        ? priorDraws.filter((d) => d.numbers.includes(b)).length
+        : hits.w150 * 8
+      : baseIdx >= 0
+      ? baseCfg.hotWeights[baseIdx]
+      : gameType === "6/55"
+      ? 154
+      : 20;
 
     ballScores.push({
       ball: b,
-      momentumWeight: Math.max(10, Math.round(priorWeight + mZ * 12)),
-      hazardScore: rScore + (skipGap >= 6 ? 0.25 : 0),
+      momentumWeight: Math.max(10, Math.round(priorWeight + mZ * 18)),
+      hazardScore: rScore + (skipGap >= 8 ? 0.35 : 0),
     });
   }
 
   const sortedHot = [...ballScores]
-    .sort((a, b) => b.momentumWeight - a.momentumWeight)
+    .sort((a, b) => b.momentumWeight - a.momentumWeight || a.ball - b.ball)
     .slice(0, 22);
   const sortedCold = [...ballScores]
-    .sort((a, b) => b.hazardScore - a.hazardScore)
+    .sort((a, b) => b.hazardScore - a.hazardScore || a.ball - b.ball)
     .slice(0, 12);
 
   return {
@@ -624,6 +894,9 @@ export function buildDynamicGameConfigForDate(
     latestDrawId: newestDraw.id,
     latestDrawDate: newestDraw.date,
     nextDrawId: String(Number(newestDraw.id) + 1).padStart(5, "0"),
+    currentJackpot1Vnd,
+    currentJackpot2Vnd,
+    seedMultiplier,
     hotPool: sortedHot.map((x) => x.ball),
     hotWeights: sortedHot.map((x) => x.momentumWeight),
     coldOverduePool: sortedCold.map((x) => x.ball),

@@ -16,7 +16,9 @@ import {
   calculateNetPayout,
   formatVND,
   GAME_CONFIGS,
+  GameConfig,
   GameType,
+  HistoricalDraw,
 } from "@/lib/vietlottData";
 import {
   GeneratedBallot,
@@ -26,10 +28,18 @@ import {
 
 interface SieveInspectorProps {
   inspectedBallot: GeneratedBallot | null;
+  powerConfig?: GameConfig;
+  megaConfig?: GameConfig;
+  powerDraws?: HistoricalDraw[];
+  megaDraws?: HistoricalDraw[];
 }
 
 export function SieveInspectorAndBaoCalculator({
   inspectedBallot,
+  powerConfig,
+  megaConfig,
+  powerDraws,
+  megaDraws,
 }: SieveInspectorProps) {
   const [gameType, setGameType] = useState<GameType>("6/55");
   const [numbers, setNumbers] = useState<number[]>([6, 13, 21, 36, 41, 52]);
@@ -37,8 +47,9 @@ export function SieveInspectorAndBaoCalculator({
   const [allowWideSum, setAllowWideSum] = useState<boolean>(false);
   const [showBallGrid, setShowBallGrid] = useState<boolean>(false);
   const [selectedBaoCode, setSelectedBaoCode] = useState<string>("BAO_7");
-  const [customGrossPrizeVnd, setCustomGrossPrizeVnd] =
-    useState<number>(164_048_997_900);
+  const [customGrossPrizeVnd, setCustomGrossPrizeVnd] = useState<number>(
+    (powerConfig ?? GAME_CONFIGS["6/55"]).currentJackpot1Vnd
+  );
 
   // Sync when user clicks "Inspect" on any ballot card in the matrix
   useEffect(() => {
@@ -52,11 +63,18 @@ export function SieveInspectorAndBaoCalculator({
     }
   }, [inspectedBallot]);
 
-  const cfg = GAME_CONFIGS[gameType];
+  const powerCfg = powerConfig ?? GAME_CONFIGS["6/55"];
+  const megaCfg = megaConfig ?? GAME_CONFIGS["6/45"];
+  const cfg = gameType === "6/55" ? powerCfg : megaCfg;
+  const activeDraws = gameType === "6/55" ? powerDraws : megaDraws;
 
   const report = useMemo(() => {
-    return inspectCombinatorialSieve(numbers, gameType, { allowWideSum });
-  }, [numbers, gameType, allowWideSum]);
+    return inspectCombinatorialSieve(numbers, gameType, {
+      allowWideSum,
+      customConfig: cfg,
+      customDraws: activeDraws,
+    });
+  }, [numbers, gameType, allowWideSum, cfg, activeDraws]);
 
   const systemTiers = useMemo(() => {
     return getSystemPlayMatrix(gameType);
@@ -539,14 +557,18 @@ export function SieveInspectorAndBaoCalculator({
               <div className="flex gap-1">
                 <button
                   type="button"
-                  onClick={() => setCustomGrossPrizeVnd(164_048_997_900)}
+                  onClick={() =>
+                    setCustomGrossPrizeVnd(powerCfg.currentJackpot1Vnd)
+                  }
                   className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-200 dark:bg-slate-800 cursor-pointer"
                 >
                   6/55 JP1
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCustomGrossPrizeVnd(26_444_954_000)}
+                  onClick={() =>
+                    setCustomGrossPrizeVnd(megaCfg.currentJackpot1Vnd)
+                  }
                   className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-200 dark:bg-slate-800 cursor-pointer"
                 >
                   6/45 JP

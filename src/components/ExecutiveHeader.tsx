@@ -6,19 +6,19 @@ import {
   RefreshCw,
   Sun,
   Moon,
-  TrendingUp,
   ShieldCheck,
-  Database,
-  Zap,
   CalendarClock,
-  Award,
-  Sparkles,
+  Trophy,
 } from "lucide-react";
 import {
   calculateNetPayout,
   formatVND,
   GAME_CONFIGS,
+  GameConfig,
   getICTTelemetryClock,
+  HistoricalDraw,
+  MEGA_645_SEED_DRAWS,
+  POWER_655_SEED_DRAWS,
   SyncStatusResponse,
 } from "@/lib/vietlottData";
 
@@ -28,6 +28,8 @@ interface ExecutiveHeaderProps {
   syncStatus: SyncStatusResponse | null;
   isSyncing: boolean;
   onTriggerSync: () => void;
+  powerConfig?: GameConfig;
+  megaConfig?: GameConfig;
 }
 
 export function ExecutiveHeader({
@@ -36,11 +38,12 @@ export function ExecutiveHeader({
   syncStatus,
   isSyncing,
   onTriggerSync,
+  powerConfig,
+  megaConfig,
 }: ExecutiveHeaderProps) {
   const [clock, setClock] = useState(() =>
-    getICTTelemetryClock(new Date("2026-10-20T08:00:00+07:00"))
+    getICTTelemetryClock(new Date("2026-10-28T08:00:00+07:00"))
   );
-  const [simulateSpillover, setSimulateSpillover] = useState(false);
 
   useEffect(() => {
     setClock(getICTTelemetryClock(new Date()));
@@ -50,24 +53,8 @@ export function ExecutiveHeader({
     return () => clearInterval(timer);
   }, []);
 
-  const powerCfg = GAME_CONFIGS["6/55"];
-  const megaCfg = GAME_CONFIGS["6/45"];
-
-  const activeJp1Vnd = simulateSpillover
-    ? 312_500_000_000
-    : powerCfg.currentJackpot1Vnd;
-  const activeJp2Vnd = simulateSpillover
-    ? (powerCfg.currentJackpot2Vnd ?? 3_816_405_550) + 12_500_000_000
-    : powerCfg.currentJackpot2Vnd ?? 3_816_405_550;
-
-  const powerJp1Net = calculateNetPayout(activeJp1Vnd);
-  const powerJp2Net = calculateNetPayout(activeJp2Vnd);
-  const megaJpNet = calculateNetPayout(megaCfg.currentJackpot1Vnd);
-
-  const spilloverProgressPct = Math.min(
-    100,
-    Number(((activeJp1Vnd / 300_000_000_000) * 100).toFixed(1))
-  );
+  const powerCfg = powerConfig ?? GAME_CONFIGS["6/55"];
+  const megaCfg = megaConfig ?? GAME_CONFIGS["6/45"];
 
   return (
     <header className="w-full border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md sticky top-0 z-30">
@@ -85,7 +72,7 @@ export function ExecutiveHeader({
                   Vietlott QuantMatrix Pro
                 </h1>
                 <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30">
-                  Oct 2026 Calibrated Engine
+                  Live Calibrated: 6/55 #{powerCfg.latestDrawId} • 6/45 #{megaCfg.latestDrawId}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -161,7 +148,7 @@ export function ExecutiveHeader({
             disabled={isSyncing}
             title={
               syncStatus?.message ||
-              "Click to sync Tier 1 GitHub NDJSON dataset with Tier 2 Empirical Seed fallback"
+              "Click to sync Tier 1 GitHub NDJSON dataset & live Jackpot pools with Tier 2 Empirical Seed fallback"
             }
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
           >
@@ -172,8 +159,8 @@ export function ExecutiveHeader({
             />
             <span className="font-mono text-[11px]">
               {syncStatus?.tier === "TIER_1_LIVE_CLOUD_HYBRID"
-                ? "Tier 1+2 Cloud Synced"
-                : "Tier 2 Seed DB Ready"}
+                ? `Tier 1 Live (#${powerCfg.latestDrawId} / #${megaCfg.latestDrawId})`
+                : `Tier 2 Seed (#${powerCfg.latestDrawId} / #${megaCfg.latestDrawId})`}
             </span>
           </button>
 
@@ -200,7 +187,7 @@ export function ExecutiveHeader({
         </div>
       </div>
 
-      {/* Official Weekly Matrix Schedule Quick-Reference Strip (Essential for Mobile Users) */}
+      {/* Official Weekly Matrix Schedule Quick-Reference Strip */}
       <div className="bg-slate-50/90 dark:bg-slate-900/70 border-t border-slate-200/70 dark:border-slate-800/80">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-1.5 flex items-center justify-between flex-wrap gap-2 text-[11px]">
           <div className="flex items-center flex-wrap gap-2 sm:gap-4">
@@ -229,23 +216,40 @@ export function ExecutiveHeader({
 }
 
 interface JackpotTelemetryBannerProps {
+  powerConfig?: GameConfig;
+  megaConfig?: GameConfig;
+  powerDraws?: HistoricalDraw[];
+  megaDraws?: HistoricalDraw[];
   onSelectGameFilter?: (game: "ALL" | "6/55" | "6/45") => void;
 }
 
 export function JackpotTelemetryBanner({
-  onSelectGameFilter,
+  powerConfig,
+  megaConfig,
+  powerDraws,
+  megaDraws,
 }: JackpotTelemetryBannerProps) {
   const [simulateSpillover, setSimulateSpillover] = useState(false);
 
-  const powerCfg = GAME_CONFIGS["6/55"];
-  const megaCfg = GAME_CONFIGS["6/45"];
+  const powerCfg = powerConfig ?? GAME_CONFIGS["6/55"];
+  const megaCfg = megaConfig ?? GAME_CONFIGS["6/45"];
+  const pDraws = powerDraws ?? POWER_655_SEED_DRAWS;
+  const mDraws = megaDraws ?? MEGA_645_SEED_DRAWS;
+
+  // Find most recent Jackpot win event in the last 5 draws to surface in the telemetry card
+  const recentPowerJpWin = pDraws
+    .slice(0, 5)
+    .find((d) => (d.jp1Winners && d.jp1Winners > 0) || d.isJackpotWon);
+  const recentMegaJpWin = mDraws
+    .slice(0, 5)
+    .find((d) => (d.jp1Winners && d.jp1Winners > 0) || d.isJackpotWon);
 
   const activeJp1Vnd = simulateSpillover
     ? 312_500_000_000
     : powerCfg.currentJackpot1Vnd;
   const surplusSpilloverVnd = simulateSpillover ? 12_500_000_000 : 0;
   const activeJp2Vnd =
-    (powerCfg.currentJackpot2Vnd ?? 3_816_405_550) + surplusSpilloverVnd;
+    (powerCfg.currentJackpot2Vnd ?? 4_432_627_250) + surplusSpilloverVnd;
 
   const powerJp1Net = calculateNetPayout(activeJp1Vnd);
   const powerJp2Net = calculateNetPayout(activeJp2Vnd);
@@ -287,8 +291,19 @@ export function JackpotTelemetryBanner({
             </div>
           </div>
 
+          {recentPowerJpWin && !simulateSpillover && (
+            <div className="mt-2 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] font-mono text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+              <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span>
+                #{recentPowerJpWin.id} ({recentPowerJpWin.date.slice(5)}):{" "}
+                <strong>{formatVND(recentPowerJpWin.jackpot1Vnd, true)} WON!</strong>{" "}
+                (Reset → 30B Seed)
+              </span>
+            </div>
+          )}
+
           {/* Net After-Tax Payout (10% PIT above 10M VND) */}
-          <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs">
+          <div className="mt-2.5 pt-2 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs">
             <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
               Net After 10% PIT:
@@ -299,7 +314,7 @@ export function JackpotTelemetryBanner({
           </div>
 
           <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-            <span>Schedule: Tue • Thu • Sat</span>
+            <span>Latest: {powerCfg.latestDrawDate}</span>
             <span>Odds: 1 : 28,989,675</span>
           </div>
         </div>
@@ -320,7 +335,9 @@ export function JackpotTelemetryBanner({
               onClick={() => setSimulateSpillover((prev) => !prev)}
               className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors cursor-pointer"
             >
-              {simulateSpillover ? "Reset to 164.05B" : "Sim >300B Spillover"}
+              {simulateSpillover
+                ? `Reset to Live (${formatVND(powerCfg.currentJackpot1Vnd, true)})`
+                : "Sim >300B Spillover"}
             </button>
           </div>
 
@@ -402,8 +419,19 @@ export function JackpotTelemetryBanner({
             </div>
           </div>
 
+          {recentMegaJpWin && (
+            <div className="mt-2 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-[11px] font-mono text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+              <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span>
+                #{recentMegaJpWin.id} ({recentMegaJpWin.date.slice(5)}):{" "}
+                <strong>{formatVND(recentMegaJpWin.jackpot1Vnd, true)} WON!</strong>{" "}
+                (Reset → 12B Seed)
+              </span>
+            </div>
+          )}
+
           {/* Net After-Tax Payout */}
-          <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs">
+          <div className="mt-2.5 pt-2 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs">
             <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
               Net After 10% PIT:
@@ -414,7 +442,7 @@ export function JackpotTelemetryBanner({
           </div>
 
           <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-            <span>Schedule: Wed • Fri • Sun</span>
+            <span>Latest: {megaCfg.latestDrawDate}</span>
             <span>Odds: 1 : 8,145,060</span>
           </div>
         </div>

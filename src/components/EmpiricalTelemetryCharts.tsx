@@ -28,13 +28,14 @@ import {
 import {
   CONSECUTIVE_PAIR_INCIDENCE,
   formatVND,
+  GAME_CONFIGS,
+  GameConfig,
   GameType,
   generateGaussianBellCurveData,
   getFullBallTelemetry,
+  HistoricalDraw,
   MACRO_PARITY_DISTRIBUTION,
   MEGA_645_SEED_DRAWS,
-  MEGA_645_TELEMETRY_LEADERS,
-  POWER_655_FREQUENCY_LEADERS,
   POWER_655_SEED_DRAWS,
 } from "@/lib/vietlottData";
 
@@ -46,7 +47,19 @@ type WindowKey =
   | "hitsW150"
   | "hitsAllTime";
 
-export function EmpiricalTelemetryCharts() {
+interface EmpiricalTelemetryChartsProps {
+  powerDraws?: HistoricalDraw[];
+  megaDraws?: HistoricalDraw[];
+  powerConfig?: GameConfig;
+  megaConfig?: GameConfig;
+}
+
+export function EmpiricalTelemetryCharts({
+  powerDraws,
+  megaDraws,
+  powerConfig,
+  megaConfig,
+}: EmpiricalTelemetryChartsProps) {
   const [mounted, setMounted] = useState(false);
   const [telemetryGame, setTelemetryGame] = useState<GameType>("6/55");
   const [selectedWindow, setSelectedWindow] =
@@ -57,25 +70,38 @@ export function EmpiricalTelemetryCharts() {
     setMounted(true);
   }, []);
 
+  const pDraws =
+    powerDraws && powerDraws.length > 0 ? powerDraws : POWER_655_SEED_DRAWS;
+  const mDraws =
+    megaDraws && megaDraws.length > 0 ? megaDraws : MEGA_645_SEED_DRAWS;
+  const powerCfg = powerConfig ?? GAME_CONFIGS["6/55"];
+  const megaCfg = megaConfig ?? GAME_CONFIGS["6/45"];
+
   const bellCurveData = useMemo(() => generateGaussianBellCurveData(), []);
 
-  // Power 6/55 15-Draw Rollover Trajectory (chronological #01398 -> #01412)
+  // Power 6/55 Recent 19-Draw Rollover & Reset Trajectory (chronological #01398 -> latest)
   const rolloverSurgeData = useMemo(() => {
-    return [...POWER_655_SEED_DRAWS].reverse().map((d) => ({
+    const recent19 = pDraws.slice(0, 19);
+    return [...recent19].reverse().map((d) => ({
       drawId: `#${d.id}`,
       date: d.date.slice(5), // MM-DD
       jp1Billion: Number((d.jackpot1Vnd / 1_000_000_000).toFixed(2)),
-      jp2Billion: Number(((d.jackpot2Vnd ?? 3_000_000_000) / 1_000_000_000).toFixed(2)),
+      jp2Billion: Number(
+        ((d.jackpot2Vnd ?? 3_000_000_000) / 1_000_000_000).toFixed(2)
+      ),
       sum: d.sum,
+      jp1Winners: d.jp1Winners ?? 0,
       jp2Winners: d.jp2Winners ?? 0,
     }));
-  }, []);
+  }, [pDraws]);
 
-  // Multi-Window Hot & Cold Bar Chart Data
+  const activeTelemetryDraws = telemetryGame === "6/55" ? pDraws : mDraws;
+
+  // Multi-Window Hot & Cold Bar Chart Data (dynamically computed from live draw history)
   const windowChartData = useMemo(() => {
-    const allStats = getFullBallTelemetry(telemetryGame);
+    const allStats = getFullBallTelemetry(telemetryGame, activeTelemetryDraws);
     const sortedByWindow = [...allStats].sort(
-      (a, b) => b[selectedWindow] - a[selectedWindow]
+      (a, b) => b[selectedWindow] - a[selectedWindow] || a.ball - b.ball
     );
     const top8Hot = sortedByWindow.slice(0, 8);
     const bottom6Cold = sortedByWindow.slice(-6).reverse();
@@ -91,13 +117,13 @@ export function EmpiricalTelemetryCharts() {
       regime: item.regime,
       isTopHot: top8Hot.some((h) => h.ball === item.ball),
     }));
-  }, [telemetryGame, selectedWindow]);
+  }, [telemetryGame, selectedWindow, activeTelemetryDraws]);
 
-  // Overdue Skip-Gap ("Lo Gan") Leaders Data
+  // Overdue Skip-Gap ("Lô Gan") Leaders Data (dynamically computed from live draw history)
   const skipGapChartData = useMemo(() => {
-    const allStats = getFullBallTelemetry(telemetryGame);
+    const allStats = getFullBallTelemetry(telemetryGame, activeTelemetryDraws);
     return [...allStats]
-      .sort((a, b) => b.skipGap - a.skipGap)
+      .sort((a, b) => b.skipGap - a.skipGap || a.ball - b.ball)
       .slice(0, 10)
       .map((item) => ({
         ballLabel: `Ball ${String(item.ball).padStart(2, "0")}`,
@@ -106,7 +132,7 @@ export function EmpiricalTelemetryCharts() {
         hitsAllTime: item.hitsAllTime,
         note: item.note || "",
       }));
-  }, [telemetryGame]);
+  }, [telemetryGame, activeTelemetryDraws]);
 
   const windowOptions: Array<{ key: WindowKey; label: string }> = [
     { key: "hitsW10", label: "10 Draws" },
@@ -117,8 +143,7 @@ export function EmpiricalTelemetryCharts() {
     { key: "hitsAllTime", label: "All-Time" },
   ];
 
-  const activeHistoricalDraws =
-    historyGame === "6/55" ? POWER_655_SEED_DRAWS : MEGA_645_SEED_DRAWS;
+  const activeHistoricalDraws = historyGame === "6/55" ? pDraws : mDraws;
 
   return (
     <section
@@ -135,8 +160,11 @@ export function EmpiricalTelemetryCharts() {
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Combinatorial proof across all 8,145,060 Mega 6/45 and 28,989,675 Power
-            6/55 outcomes alongside October 2026 empirical telemetry.
+            Live multi-window telemetry across{" "}
+            <strong>{pDraws.length.toLocaleString("en-US")}</strong> Power 6/55
+            draws (through #{powerCfg.latestDrawId}) and{" "}
+            <strong>{mDraws.length.toLocaleString("en-US")}</strong> Mega 6/45
+            draws (through #{megaCfg.latestDrawId}).
           </p>
         </div>
 
@@ -158,7 +186,7 @@ export function EmpiricalTelemetryCharts() {
                   : "text-slate-600 dark:text-slate-400"
               }`}
             >
-              Power 6/55
+              Power 6/55 (#{powerCfg.latestDrawId})
             </button>
             <button
               type="button"
@@ -172,7 +200,7 @@ export function EmpiricalTelemetryCharts() {
                   : "text-slate-600 dark:text-slate-400"
               }`}
             >
-              Mega 6/45
+              Mega 6/45 (#{megaCfg.latestDrawId})
             </button>
           </div>
         </div>
@@ -456,18 +484,20 @@ export function EmpiricalTelemetryCharts() {
         </div>
       </div>
 
-      {/* ROW 3: Power 6/55 15-Draw Rollover Surge Trajectory (#01398 -> #01412) & Verified Historical Draw Ledger */}
+      {/* ROW 3: Power 6/55 Rollover & Reset Trajectory & Verified Historical Draw Ledger */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left 5 Cols: Power 6/55 15-Draw Jackpot 1 Escalation Chart */}
+        {/* Left 5 Cols: Power 6/55 Jackpot 1 Escalation & Reset Chart */}
         <div className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm space-y-3">
           <div>
             <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
               <TrendingUp className="w-4 h-4 text-red-500" />
-              Power 6/55 Jackpot 1 Surge (#01398 → #01412)
+              Power 6/55 Jackpot 1 Trajectory (Through #{powerCfg.latestDrawId})
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              +141.3% expansion from 67.98B VND (Sep 15) to 164.05B VND (Oct 17,
-              2026) with 8 JP2 winning tickets across 6 draws.
+              Surged from 67.98B VND (#01398) to <strong>199.98B VND</strong>{" "}
+              (won in #01415 on Oct 24!), resetting to{" "}
+              <strong>{formatVND(powerCfg.currentJackpot1Vnd, true)}</strong>{" "}
+              (#{powerCfg.latestDrawId}).
             </p>
           </div>
 
@@ -501,16 +531,16 @@ export function EmpiricalTelemetryCharts() {
           </div>
         </div>
 
-        {/* Right 7 Cols: Tier 2 Verified October 2026 Historical Draw Ledger */}
+        {/* Right 7 Cols: Live Synced & Verified Historical Draw Ledger */}
         <div className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
               <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
                 <History className="w-4 h-4 text-indigo-500" />
-                Verified Historical Draw Ledger (Oct 2026 Seed DB)
+                Live Synced Historical Draw Ledger
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Complete draw results, sums, parity splits, and jackpot pools.
+                Complete draw results, sums, parity splits, and jackpot winners.
               </p>
             </div>
 
@@ -524,7 +554,7 @@ export function EmpiricalTelemetryCharts() {
                     : "text-slate-600 dark:text-slate-400"
                 }`}
               >
-                Power 6/55 ({POWER_655_SEED_DRAWS.length})
+                Power 6/55 ({pDraws.length.toLocaleString("en-US")})
               </button>
               <button
                 type="button"
@@ -535,7 +565,7 @@ export function EmpiricalTelemetryCharts() {
                     : "text-slate-600 dark:text-slate-400"
                 }`}
               >
-                Mega 6/45 ({MEGA_645_SEED_DRAWS.length})
+                Mega 6/45 ({mDraws.length.toLocaleString("en-US")})
               </button>
             </div>
           </div>
@@ -553,7 +583,7 @@ export function EmpiricalTelemetryCharts() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {activeHistoricalDraws.map((d) => (
+                {activeHistoricalDraws.slice(0, 50).map((d) => (
                   <tr
                     key={`${d.gameType}-${d.id}`}
                     className="hover:bg-slate-50 dark:hover:bg-slate-800/50"
@@ -593,6 +623,11 @@ export function EmpiricalTelemetryCharts() {
                     </td>
                     <td className="py-2 px-2.5 text-right font-bold text-emerald-600 dark:text-emerald-400">
                       {formatVND(d.jackpot1Vnd, true)}
+                      {(d.jp1Winners && d.jp1Winners > 0) || d.isJackpotWon ? (
+                        <span className="block text-[10px] text-red-500 font-extrabold">
+                          [★ JP1 WON!]
+                        </span>
+                      ) : null}
                       {d.jp2Winners && d.jp2Winners > 0 ? (
                         <span className="block text-[10px] text-amber-500">
                           [{d.jp2Winners} JP2 Won]
@@ -612,23 +647,30 @@ export function EmpiricalTelemetryCharts() {
         <div className="flex items-center gap-2.5">
           <BookOpen className="w-5 h-5 text-amber-400 shrink-0" />
           <h3 className="text-base sm:text-lg font-extrabold tracking-tight">
-            Strategic Synthesis &amp; Quantitative Execution Conclusions
+            Strategic Synthesis &amp; Live Quantitative Execution Conclusions
           </h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs sm:text-sm text-slate-300 leading-relaxed">
           <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
             <div className="font-mono font-bold text-amber-400 text-xs uppercase">
-              1. Asymmetric Capital Allocation
+              1. Live Capital Allocation (Post-Reset Cycle)
             </div>
             <p>
               Playing all 5 orthogonal strategy ballots on an active draw day
               requires <strong>50,000 VND</strong> (5 × 10,000 VND), or{" "}
               <strong>300,000 VND</strong> across the full 6-day Tuesday–Sunday
-              cycle. With Power 6/55 JP1 at <strong>164.05B VND</strong> (5.47× its
-              30B seed) vs. Mega 6/45 at <strong>26.44B VND</strong> (2.20× its 12B
-              seed), risk-adjusted EV strongly favors Tuesday, Thursday, and
-              Saturday Power 6/55 drawings.
+              cycle. Following the <strong>199.98B VND</strong> Power 6/55 JP1 win
+              in Draw #01415 (Oct 24) and <strong>31.28B VND</strong> Mega 6/45 win
+              in Draw #01578 (Oct 21), Power 6/55 stands at{" "}
+              <strong>{formatVND(powerCfg.currentJackpot1Vnd, true)}</strong> (
+              {powerCfg.seedMultiplier}× its 30B seed, plus{" "}
+              <strong>
+                {formatVND(powerCfg.currentJackpot2Vnd ?? 4_432_627_250, true)}
+              </strong>{" "}
+              in JP2) while Mega 6/45 sits at{" "}
+              <strong>{formatVND(megaCfg.currentJackpot1Vnd, true)}</strong> (
+              {megaCfg.seedMultiplier}× its 12B seed).
             </p>
           </div>
 

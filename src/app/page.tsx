@@ -13,9 +13,12 @@ import {
   generateRollingSchedule,
 } from "@/lib/quantEngine";
 import {
+  buildDynamicGameConfigForDate,
+  GITHUB_NDJSON_URLS,
   getICTTelemetryClock,
   HistoricalDraw,
   MEGA_645_SEED_DRAWS,
+  parseMinhNgocJackpots,
   parseNDJsonDraws,
   POWER_655_SEED_DRAWS,
   SyncStatusResponse,
@@ -29,9 +32,9 @@ import {
 
 export default function VietlottQuantMatrixDashboard() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [anchorDate, setAnchorDate] = useState<string>("2026-10-20");
+  const [anchorDate, setAnchorDate] = useState<string>("2026-10-28");
   const [seedSalt, setSeedSalt] = useState<number>(0);
-  const [simulateDraw1413, setSimulateDraw1413] = useState<boolean>(false);
+  const [simulateNextDraw, setSimulateNextDraw] = useState<boolean>(false);
   const [inspectedBallot, setInspectedBallot] =
     useState<GeneratedBallot | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null);
@@ -63,7 +66,8 @@ export default function VietlottQuantMatrixDashboard() {
     setIsSyncing(true);
     try {
       const res = await fetch("/api/sync-vietlott", { cache: "no-store" });
-      if (res.ok) {
+      const contentType = res.headers.get("content-type") || "";
+      if (res.ok && contentType.includes("application/json")) {
         const data: SyncStatusResponse = await res.json();
         setSyncStatus(data);
         return;
@@ -71,50 +75,131 @@ export default function VietlottQuantMatrixDashboard() {
       throw new Error("API route unavailable on static host");
     } catch {
       try {
-        const [pRes, mRes] = await Promise.all([
+        const [pRes, mRes, mnPowerRes, mnMegaRes] = await Promise.all([
+          fetch(GITHUB_NDJSON_URLS.power655, { cache: "no-store" }),
+          fetch(GITHUB_NDJSON_URLS.mega645, { cache: "no-store" }),
           fetch(
-            "https://raw.githubusercontent.com/vietvudanh/vietlott-data/main/data/power655.jsonl"
-          ),
+            `https://api.allorigins.win/raw?url=${encodeURIComponent(
+              GITHUB_NDJSON_URLS.minhNgocPower655
+            )}`
+          ).catch(() => null),
           fetch(
-            "https://raw.githubusercontent.com/vietvudanh/vietlott-data/main/data/power645.jsonl"
-          ),
+            `https://api.allorigins.win/raw?url=${encodeURIComponent(
+              GITHUB_NDJSON_URLS.minhNgocMega645
+            )}`
+          ).catch(() => null),
         ]);
-        if (pRes.ok && mRes.ok) {
-          const [pText, mText] = await Promise.all([pRes.text(), mRes.text()]);
-          const pLines = pText.split(/\r?\n/).filter((l) => l.trim().length > 0).length;
-          const mLines = mText.split(/\r?\n/).filter((l) => l.trim().length > 0).length;
-          const parsedPower = parseNDJsonDraws(pText, "6/55", 150);
-          const parsedMega = parseNDJsonDraws(mText, "6/45", 150);
 
-          const powerMap = new Map(POWER_655_SEED_DRAWS.map((d) => [d.id, d]));
-          for (const d of parsedPower) {
-            if (!powerMap.has(d.id)) powerMap.set(d.id, d);
+        if (pRes.ok && mRes.ok) {
+          const [pText, mText, mnPowerHtml, mnMegaHtml] = await Promise.all([
+            pRes.text(),
+            mRes.text(),
+            mnPowerRes && mnPowerRes.ok
+              ? mnPowerRes.text().catch(() => "")
+              : "",
+            mnMegaRes && mnMegaRes.ok ? mnMegaRes.text().catch(() => "") : "",
+          ]);
+
+          const livePowerJp = mnPowerHtml
+            ? parseMinhNgocJackpots(mnPowerHtml, "6/55")
+            : undefined;
+          const liveMegaJp = mnMegaHtml
+            ? parseMinhNgocJackpots(mnMegaHtml, "6/45")
+            : undefined;
+
+          const pLines = pText
+            .split(/\r?\n/)
+            .filter((l) => l.trim().length > 0).length;
+          const mLines = mText
+            .split(/\r?\n/)
+            .filter((l) => l.trim().length > 0).length;
+
+          const parsedPower = parseNDJsonDraws(
+            pText,
+            "6/55",
+            2500,
+            livePowerJp
+          );
+          const parsedMega = parseNDJsonDraws(
+            mText,
+            "6/45",
+            2500,
+            liveMegaJp
+          );
+
+          const powerMap = new Map(parsedPower.map((d) => [d.id, d]));
+          for (const seedDraw of POWER_655_SEED_DRAWS) {
+            const existing = powerMap.get(seedDraw.id);
+            if (!existing) {
+              powerMap.set(seedDraw.id, seedDraw);
+            } else {
+              powerMap.set(seedDraw.id, {
+                ...existing,
+                jackpot1Vnd:
+                  livePowerJp?.drawId === seedDraw.id &&
+                  livePowerJp?.jackpot1Vnd
+                    ? livePowerJp.jackpot1Vnd
+                    : seedDraw.jackpot1Vnd,
+                jackpot2Vnd:
+                  livePowerJp?.drawId === seedDraw.id &&
+                  livePowerJp?.jackpot2Vnd
+                    ? livePowerJp.jackpot2Vnd
+                    : seedDraw.jackpot2Vnd,
+                jp1Winners:
+                  livePowerJp?.drawId === seedDraw.id &&
+                  livePowerJp?.jp1Winners !== undefined
+                    ? livePowerJp.jp1Winners
+                    : seedDraw.jp1Winners,
+                jp2Winners:
+                  livePowerJp?.drawId === seedDraw.id &&
+                  livePowerJp?.jp2Winners !== undefined
+                    ? livePowerJp.jp2Winners
+                    : seedDraw.jp2Winners,
+                isJackpotWon: seedDraw.isJackpotWon,
+              });
+            }
           }
           const mergedPower = Array.from(powerMap.values()).sort((a, b) =>
             b.date.localeCompare(a.date)
           );
 
-          const megaMap = new Map(MEGA_645_SEED_DRAWS.map((d) => [d.id, d]));
-          for (const d of parsedMega) {
-            if (!megaMap.has(d.id)) megaMap.set(d.id, d);
+          const megaMap = new Map(parsedMega.map((d) => [d.id, d]));
+          for (const seedDraw of MEGA_645_SEED_DRAWS) {
+            const existing = megaMap.get(seedDraw.id);
+            if (!existing) {
+              megaMap.set(seedDraw.id, seedDraw);
+            } else {
+              megaMap.set(seedDraw.id, {
+                ...existing,
+                jackpot1Vnd:
+                  liveMegaJp?.drawId === seedDraw.id && liveMegaJp?.jackpot1Vnd
+                    ? liveMegaJp.jackpot1Vnd
+                    : seedDraw.jackpot1Vnd,
+                jp1Winners:
+                  liveMegaJp?.drawId === seedDraw.id &&
+                  liveMegaJp?.jp1Winners !== undefined
+                    ? liveMegaJp.jp1Winners
+                    : seedDraw.jp1Winners,
+                isJackpotWon: seedDraw.isJackpotWon,
+              });
+            }
           }
           const mergedMega = Array.from(megaMap.values()).sort((a, b) =>
             b.date.localeCompare(a.date)
           );
 
-          const { GITHUB_NDJSON_URLS } = await import("@/lib/vietlottData");
           setSyncStatus({
             tier: "TIER_1_LIVE_CLOUD_HYBRID",
             syncedAt: new Date().toISOString(),
-            power655TotalDraws: Math.max(1412, pLines),
-            mega645TotalDraws: Math.max(1577, mLines),
+            power655TotalDraws: Math.max(1416, pLines, mergedPower.length),
+            mega645TotalDraws: Math.max(1580, mLines, mergedMega.length),
             latestPowerDraw: mergedPower[0] || POWER_655_SEED_DRAWS[0],
             latestMegaDraw: mergedMega[0] || MEGA_645_SEED_DRAWS[0],
             powerDraws: mergedPower,
             megaDraws: mergedMega,
             sourceUrlPower: GITHUB_NDJSON_URLS.power655,
             sourceUrlMega: GITHUB_NDJSON_URLS.mega645,
-            message: `Tier 1 Cloud NDJSON Sync Active (${pLines} Power 6/55 & ${mLines} Mega 6/45 records ingested + Oct 2026 calibration).`,
+            message: `Tier 1 Cloud NDJSON Sync Active (${mergedPower.length} Power 6/55 through #${mergedPower[0]?.id} & ${mergedMega.length} Mega 6/45 through #${mergedMega[0]?.id}).`,
           });
         }
       } catch {
@@ -130,38 +215,78 @@ export default function VietlottQuantMatrixDashboard() {
     triggerCloudSync();
   }, [triggerCloudSync]);
 
-  // Generate deterministic 7-to-8 day rolling schedule, dynamically re-synthesizing as new draws settle
-  const rollingSchedule = useMemo(() => {
+  // Compute live effective draw arrays (including optional "Sim Next Draw Settlement")
+  const { effectivePowerDraws, effectiveMegaDraws } = useMemo(() => {
     const basePower = syncStatus?.powerDraws ?? POWER_655_SEED_DRAWS;
     const baseMega = syncStatus?.megaDraws ?? MEGA_645_SEED_DRAWS;
 
-    const effectivePowerDraws: HistoricalDraw[] = simulateDraw1413
-      ? [
-          {
-            id: "01413",
-            date: "2026-10-20",
-            weekday: "Tuesday",
-            gameType: "6/55",
-            numbers: [6, 13, 21, 36, 41, 52],
-            bonus: 22,
-            sum: 169,
-            oddEven: "3O-3E",
-            lowHigh: "3L-3H",
-            consecPairs: 0,
-            jackpot1Vnd: 171_500_000_000,
-            jackpot2Vnd: 4_150_000_000,
-            jp1Winners: 0,
-            jp2Winners: 0,
-          },
-          ...basePower,
-        ]
-      : basePower;
+    if (!simulateNextDraw) {
+      return {
+        effectivePowerDraws: basePower,
+        effectiveMegaDraws: baseMega,
+      };
+    }
 
+    const latestP = basePower[0] ?? POWER_655_SEED_DRAWS[0];
+    const latestM = baseMega[0] ?? MEGA_645_SEED_DRAWS[0];
+
+    const simPowerDraw: HistoricalDraw = {
+      id: String(Number(latestP.id) + 1).padStart(5, "0"),
+      date: anchorDate,
+      weekday: "Thursday",
+      gameType: "6/55",
+      numbers: [6, 13, 21, 36, 41, 52],
+      bonus: 22,
+      sum: 169,
+      oddEven: "3O-3E",
+      lowHigh: "3L-3H",
+      consecPairs: 0,
+      jackpot1Vnd: (latestP.jackpot1Vnd || 31_758_267_450) + 9_850_000_000,
+      jackpot2Vnd: (latestP.jackpot2Vnd || 4_432_627_250) + 650_000_000,
+      jp1Winners: 0,
+      jp2Winners: 0,
+    };
+
+    const simMegaDraw: HistoricalDraw = {
+      id: String(Number(latestM.id) + 1).padStart(5, "0"),
+      date: anchorDate,
+      weekday: "Wednesday",
+      gameType: "6/45",
+      numbers: [7, 12, 21, 28, 31, 39],
+      sum: 138,
+      oddEven: "3O-3E",
+      lowHigh: "3L-3H",
+      consecPairs: 0,
+      jackpot1Vnd: (latestM.jackpot1Vnd || 16_103_186_000) + 2_450_000_000,
+      jp1Winners: 0,
+    };
+
+    return {
+      effectivePowerDraws: [simPowerDraw, ...basePower],
+      effectiveMegaDraws: [simMegaDraw, ...baseMega],
+    };
+  }, [syncStatus, simulateNextDraw, anchorDate]);
+
+  // Dynamically compute live GameConfigs for Header, Jackpot Cards, Sieve Inspector, and Telemetry
+  const livePowerConfig = useMemo(
+    () =>
+      buildDynamicGameConfigForDate("6/55", "9999-12-31", effectivePowerDraws),
+    [effectivePowerDraws]
+  );
+
+  const liveMegaConfig = useMemo(
+    () =>
+      buildDynamicGameConfigForDate("6/45", "9999-12-31", effectiveMegaDraws),
+    [effectiveMegaDraws]
+  );
+
+  // Generate deterministic 7-to-8 day rolling schedule, dynamically re-synthesizing as new draws settle
+  const rollingSchedule = useMemo(() => {
     return generateRollingSchedule(anchorDate, 8, seedSalt, {
       powerDraws: effectivePowerDraws,
-      megaDraws: baseMega,
+      megaDraws: effectiveMegaDraws,
     });
-  }, [anchorDate, seedSalt, syncStatus, simulateDraw1413]);
+  }, [anchorDate, seedSalt, effectivePowerDraws, effectiveMegaDraws]);
 
   const handleInspectBallot = useCallback((ballot: GeneratedBallot) => {
     setInspectedBallot(ballot);
@@ -180,10 +305,17 @@ export default function VietlottQuantMatrixDashboard() {
         syncStatus={syncStatus}
         isSyncing={isSyncing}
         onTriggerSync={triggerCloudSync}
+        powerConfig={livePowerConfig}
+        megaConfig={liveMegaConfig}
       />
 
       {/* Active Jackpot & 300B Spillover Telemetry Cards */}
-      <JackpotTelemetryBanner />
+      <JackpotTelemetryBanner
+        powerConfig={livePowerConfig}
+        megaConfig={liveMegaConfig}
+        powerDraws={effectivePowerDraws}
+        megaDraws={effectiveMegaDraws}
+      />
 
       {/* Mobile Quick-Jump Section Bar */}
       <nav
@@ -231,17 +363,28 @@ export default function VietlottQuantMatrixDashboard() {
             onReRollSeed={() => setSeedSalt((s) => s + 1)}
             onResetSeed={() => setSeedSalt(0)}
             onInspectBallot={handleInspectBallot}
-            simulateDraw1413={simulateDraw1413}
-            onToggleSimulateDraw1413={() => setSimulateDraw1413((prev) => !prev)}
+            simulateDraw1413={simulateNextDraw}
+            onToggleSimulateDraw1413={() => setSimulateNextDraw((prev) => !prev)}
           />
         </div>
 
         {/* 3. Custom Ballot Sieve Inspector & System Play ("Chơi Bao") Calculator */}
-        <SieveInspectorAndBaoCalculator inspectedBallot={inspectedBallot} />
+        <SieveInspectorAndBaoCalculator
+          inspectedBallot={inspectedBallot}
+          powerConfig={livePowerConfig}
+          megaConfig={liveMegaConfig}
+          powerDraws={effectivePowerDraws}
+          megaDraws={effectiveMegaDraws}
+        />
 
         {/* 4. Empirical Telemetry Charts (Recharts) & Historical Draw Ledger */}
         <div id="telemetry-charts-section">
-          <EmpiricalTelemetryCharts />
+          <EmpiricalTelemetryCharts
+            powerDraws={effectivePowerDraws}
+            megaDraws={effectiveMegaDraws}
+            powerConfig={livePowerConfig}
+            megaConfig={liveMegaConfig}
+          />
         </div>
       </main>
 
@@ -265,7 +408,9 @@ export default function VietlottQuantMatrixDashboard() {
               </strong>
             </div>
             <div>
-              Calibrated through Power 6/55 #01412 &amp; Mega 6/45 #01577 (Oct 2026)
+              Live Calibrated through Power 6/55 #{livePowerConfig.latestDrawId}{" "}
+              ({livePowerConfig.latestDrawDate}) &amp; Mega 6/45 #
+              {liveMegaConfig.latestDrawId} ({liveMegaConfig.latestDrawDate})
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   Dices,
@@ -16,12 +16,17 @@ import {
   Filter,
 } from "lucide-react";
 import {
+  addDaysISO,
   DayScheduleForecast,
   GeneratedBallot,
   RollingScheduleResult,
 } from "@/lib/quantEngine";
 import { BallotCard } from "@/components/BallotCard";
-import { formatVND, GAME_CONFIGS } from "@/lib/vietlottData";
+import {
+  formatVND,
+  GAME_CONFIGS,
+  getICTTelemetryClock,
+} from "@/lib/vietlottData";
 
 interface RollingForecastMatrixProps {
   schedule: RollingScheduleResult;
@@ -52,6 +57,86 @@ export function RollingForecastMatrix({
   const [selectedDayIso, setSelectedDayIso] = useState<string>(anchorDate);
   const [gameFilter, setGameFilter] = useState<"ALL" | "6/55" | "6/45">("ALL");
   const [copiedDayIso, setCopiedDayIso] = useState<string | null>(null);
+  const [liveTodayIso, setLiveTodayIso] = useState<string>("2026-10-28");
+
+  useEffect(() => {
+    const clk = getICTTelemetryClock(new Date());
+    if (clk.isoDate) {
+      setLiveTodayIso(clk.isoDate);
+    }
+  }, []);
+
+  // Compute dynamic date presets relative to liveTodayIso
+  const dynamicPresets = useMemo(() => {
+    const formatShort = (iso: string) => {
+      const dt = new Date(`${iso}T12:00:00+07:00`);
+      return dt.toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "2-digit",
+        timeZone: "Asia/Ho_Chi_Minh",
+      });
+    };
+    const getWeekday = (iso: string) => {
+      const dt = new Date(`${iso}T12:00:00+07:00`);
+      return dt.toLocaleDateString("en-US", {
+        weekday: "long",
+        timeZone: "Asia/Ho_Chi_Minh",
+      });
+    };
+
+    const todayWk = getWeekday(liveTodayIso);
+    const todayGame =
+      todayWk === "Monday"
+        ? "Rest Day"
+        : todayWk === "Tuesday" ||
+          todayWk === "Thursday" ||
+          todayWk === "Saturday"
+        ? "6/55"
+        : "6/45";
+
+    const tomorrowIso = addDaysISO(liveTodayIso, 1);
+    const tomorrowWk = getWeekday(tomorrowIso);
+    const tomorrowGame =
+      tomorrowWk === "Monday"
+        ? "Rest Day"
+        : tomorrowWk === "Tuesday" ||
+          tomorrowWk === "Thursday" ||
+          tomorrowWk === "Saturday"
+        ? "6/55"
+        : "6/45";
+
+    // Find recent Monday and upcoming Monday
+    let recentMondayIso = liveTodayIso;
+    for (let offset = 0; offset >= -6; offset--) {
+      const cand = addDaysISO(liveTodayIso, offset);
+      if (getWeekday(cand) === "Monday") {
+        recentMondayIso = cand;
+        break;
+      }
+    }
+    let nextMondayIso = addDaysISO(liveTodayIso, 1);
+    for (let offset = 1; offset <= 7; offset++) {
+      const cand = addDaysISO(liveTodayIso, offset);
+      if (getWeekday(cand) === "Monday") {
+        nextMondayIso = cand;
+        break;
+      }
+    }
+
+    return {
+      todayIso: liveTodayIso,
+      todayLabel: `Today (${formatShort(liveTodayIso)} • ${todayGame})`,
+      tomorrowIso,
+      tomorrowLabel: `Tomorrow (${formatShort(tomorrowIso)} • ${tomorrowGame})`,
+      recentMondayIso,
+      recentMondayLabel: `${formatShort(recentMondayIso)} (Monday Rest Day)`,
+      nextMondayIso,
+      nextMondayLabel: `${formatShort(nextMondayIso)} (Next Mon Rest Day)`,
+      backtestIso: "2026-10-20",
+      backtestLabel: "Oct 20 Backtest (Settled Draws)",
+    };
+  }, [liveTodayIso]);
 
   // Sync selectedDayIso if anchorDate changes
   const effectiveSelectedDay = useMemo(() => {
@@ -162,7 +247,7 @@ export function RollingForecastMatrix({
                 type="button"
                 data-testid="simulate-draw1413-btn"
                 onClick={onToggleSimulateDraw1413}
-                title="Test how completing Tuesday's #01413 draw re-anchors the seed and re-synthesizes upcoming Thursday #01414 and Saturday #01415 ballots"
+                title="Test how completing the next upcoming draw re-anchors the PRNG seed and re-synthesizes all subsequent ballots in the 7-day rolling window"
                 className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer ${
                   simulateDraw1413
                     ? "bg-emerald-600 text-white border-emerald-500 shadow-sm"
@@ -172,8 +257,8 @@ export function RollingForecastMatrix({
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>
                   {simulateDraw1413
-                    ? "✓ Simulating #01413 Settled (Re-Synthesized)"
-                    : "Sim #01413 Draw Settlement"}
+                    ? "✓ Simulating Next Draw Settled (Re-Synthesized)"
+                    : "Sim Next Draw Settlement"}
                 </span>
               </button>
             )}
@@ -223,61 +308,76 @@ export function RollingForecastMatrix({
                 type="button"
                 data-testid="preset-today"
                 onClick={() => {
-                  onChangeAnchorDate("2026-10-20");
-                  setSelectedDayIso("2026-10-20");
+                  onChangeAnchorDate(dynamicPresets.todayIso);
+                  setSelectedDayIso(dynamicPresets.todayIso);
                 }}
                 className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer border ${
-                  anchorDate === "2026-10-20"
+                  anchorDate === dynamicPresets.todayIso
                     ? "bg-indigo-600 text-white border-indigo-600 font-bold"
                     : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
                 }`}
               >
-                Today (Tue Oct 20 • 6/55)
+                {dynamicPresets.todayLabel}
+              </button>
+              <button
+                type="button"
+                data-testid="preset-tomorrow"
+                onClick={() => {
+                  onChangeAnchorDate(dynamicPresets.tomorrowIso);
+                  setSelectedDayIso(dynamicPresets.tomorrowIso);
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer border ${
+                  anchorDate === dynamicPresets.tomorrowIso
+                    ? "bg-blue-600 text-white border-blue-600 font-bold"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }`}
+              >
+                {dynamicPresets.tomorrowLabel}
               </button>
               <button
                 type="button"
                 data-testid="preset-monday"
                 onClick={() => {
-                  onChangeAnchorDate("2026-10-19");
-                  setSelectedDayIso("2026-10-19");
+                  onChangeAnchorDate(dynamicPresets.recentMondayIso);
+                  setSelectedDayIso(dynamicPresets.recentMondayIso);
                 }}
                 className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer border ${
-                  anchorDate === "2026-10-19"
+                  anchorDate === dynamicPresets.recentMondayIso
                     ? "bg-amber-500 text-slate-950 border-amber-500 font-bold"
                     : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20"
                 }`}
               >
-                Mon Oct 19 (Monday Rest Day)
+                {dynamicPresets.recentMondayLabel}
               </button>
               <button
                 type="button"
                 data-testid="preset-next-monday"
                 onClick={() => {
-                  onChangeAnchorDate("2026-10-26");
-                  setSelectedDayIso("2026-10-26");
+                  onChangeAnchorDate(dynamicPresets.nextMondayIso);
+                  setSelectedDayIso(dynamicPresets.nextMondayIso);
                 }}
                 className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer border ${
-                  anchorDate === "2026-10-26"
+                  anchorDate === dynamicPresets.nextMondayIso
                     ? "bg-amber-500 text-slate-950 border-amber-500 font-bold"
                     : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
                 }`}
               >
-                Mon Oct 26 (Rest Day)
+                {dynamicPresets.nextMondayLabel}
               </button>
               <button
                 type="button"
-                data-testid="preset-wednesday"
+                data-testid="preset-backtest"
                 onClick={() => {
-                  onChangeAnchorDate("2026-10-21");
-                  setSelectedDayIso("2026-10-21");
+                  onChangeAnchorDate(dynamicPresets.backtestIso);
+                  setSelectedDayIso(dynamicPresets.backtestIso);
                 }}
                 className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer border ${
-                  anchorDate === "2026-10-21"
-                    ? "bg-blue-600 text-white border-blue-600 font-bold"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  anchorDate === dynamicPresets.backtestIso
+                    ? "bg-emerald-600 text-white border-emerald-600 font-bold"
+                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20"
                 }`}
               >
-                Wed Oct 21 (Mega 6/45)
+                {dynamicPresets.backtestLabel}
               </button>
             </div>
           </div>
