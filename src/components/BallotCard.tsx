@@ -33,11 +33,7 @@ export function BallotCard({
     const formattedNums = ballot.numbers
       .map((n) => String(n).padStart(2, "0"))
       .join(" - ");
-    const bonusPart =
-      ballot.bonusAnchor !== undefined
-        ? ` [Bao-7 Anchor: ${String(ballot.bonusAnchor).padStart(2, "0")}]`
-        : "";
-    const text = `Vietlott ${cfg.name} (${ballot.targetDate}) | S${ballot.slot} ${ballot.strategyBadge}: ${formattedNums}${bonusPart} | Sum: ${ballot.sum} (${ballot.oddEven}, ${ballot.lowHigh})`;
+    const text = `Vietlott ${cfg.name} (${ballot.targetDate}) | S${ballot.slot} ${ballot.strategyBadge}: ${formattedNums} | Sum: ${ballot.sum} (${ballot.oddEven}, ${ballot.lowHigh})`;
 
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(text);
@@ -200,27 +196,6 @@ export function BallotCard({
             </React.Fragment>
           );
         })}
-
-        {/* 7th Bao-7 Bonus Anchor Ball on Power 6/55 Days */}
-        {ballot.gameType === "6/55" && ballot.bonusAnchor !== undefined && (
-          <div className="flex items-center ml-1.5 pl-1.5 border-l border-dashed border-amber-500/40">
-            <div className="flex items-center gap-1">
-              <span className="text-[9px] sm:text-[10px] font-mono uppercase tracking-tight font-bold text-amber-600 dark:text-amber-400">
-                BAO-7
-              </span>
-              <div
-                title="Recommended 7th Bao-7 Bonus Anchor ball to target Jackpot 2 (6x higher probability) alongside Jackpot 1"
-                className={`flex items-center justify-center rounded-full font-mono font-extrabold bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 text-slate-950 ring-2 ring-amber-400/50 shadow-sm ${
-                  compact
-                    ? "w-7 h-7 text-xs sm:w-8 sm:h-8 sm:text-xs"
-                    : "w-8 h-8 text-xs sm:w-9 sm:h-9 sm:text-sm"
-                }`}
-              >
-                {String(ballot.bonusAnchor).padStart(2, "0")}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Bottom Telemetry Strip: Sum Gauge Badge, Odd/Even, Low/High, Spread/Decades, 6-Gate Sieve Badge */}

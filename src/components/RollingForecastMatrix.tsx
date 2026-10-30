@@ -154,11 +154,7 @@ export function RollingForecastMatrix({
   const handleCopyDayAllBallots = (day: DayScheduleForecast) => {
     const lines = day.ballots.map((b) => {
       const nums = b.numbers.map((n) => String(n).padStart(2, "0")).join(" - ");
-      const bonus =
-        b.bonusAnchor !== undefined
-          ? ` [Bao-7: ${String(b.bonusAnchor).padStart(2, "0")}]`
-          : "";
-      return `S${b.slot} (${b.strategyBadge}): ${nums}${bonus} | Sum=${b.sum} (${b.oddEven}, ${b.lowHigh})`;
+      return `S${b.slot} (${b.strategyBadge}): ${nums} | Sum=${b.sum} (${b.oddEven}, ${b.lowHigh})`;
     });
     const header = `=== VIETLOTT ${day.gameName.toUpperCase()} — ${day.weekday.toUpperCase()} (${day.date}) ${day.estimatedDrawId} ===`;
     const payload = [header, ...lines].join("\n");
@@ -193,9 +189,10 @@ export function RollingForecastMatrix({
               {schedule.allHorizonDays[schedule.allHorizonDays.length - 1]?.date})
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-              5 orthogonal strategy ballots per active draw day (Tuesday–Sunday ={" "}
-              <strong>30 weekly ballots</strong>, 50,000 VND/day • 300,000 VND/week)
-              plus 7th <strong>Bao-7 Bonus Anchor</strong> on Power 6/55 days.
+              5 orthogonal <strong>6-number tickets</strong> per active draw day
+              (Tuesday–Sunday = <strong>30 weekly 6-number sets</strong>, 50,000
+              VND/day • 300,000 VND/week) targeting both Jackpot 1 (6/6) &amp;
+              Power 6/55 Jackpot 2 (5/6 Main + 6th Ball Matches Special Bonus).
             </p>
           </div>
 
@@ -734,16 +731,16 @@ export function RollingForecastMatrix({
                   {/* Day Card Footer Summary */}
                   <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-950/60 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between flex-wrap gap-2 text-[11px] font-mono text-slate-500 dark:text-slate-400">
                     <span>
-                      Daily 5-Ballot Outlay: <strong>50,000 VND</strong> (5 × 10,000
+                      Daily 5×6 Ticket Outlay: <strong>50,000 VND</strong> (5 × 10,000
                       VND)
                     </span>
                     {isPower ? (
                       <span className="text-amber-600 dark:text-amber-400 font-semibold">
-                        ★ Bao-7 Upgrade (with Bonus Anchor): 70,000 VND / set
+                        ★ 6-Ball Ticket Targets JP1 (6/6) &amp; JP2 (5/6 Main + 6th=Bonus)
                       </span>
                     ) : (
                       <span>
-                        First Prize (5 Main): 10,000,000 VND (100% Tax-Exempt)
+                        First Prize (5/6 Main): 10,000,000 VND (100% Tax-Exempt)
                       </span>
                     )}
                   </div>

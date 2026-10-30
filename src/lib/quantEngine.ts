@@ -600,6 +600,7 @@ export function generateDayForecast(
 
   const coveredTriplets = new Set<string>();
   const selectedTicketsList: number[][] = [];
+  const ballUsageCount = new Map<number, number>();
 
   const getTripletsOfTicket = (nums: number[]): string[] => {
     const sc = [...nums].sort((a, b) => a - b);
@@ -617,6 +618,9 @@ export function generateDayForecast(
   const registerSelectedTicket = (nums: number[]) => {
     const sc = [...nums].sort((a, b) => a - b);
     selectedTicketsList.push(sc);
+    for (const n of sc) {
+      ballUsageCount.set(n, (ballUsageCount.get(n) ?? 0) + 1);
+    }
     for (const t of getTripletsOfTicket(sc)) {
       coveredTriplets.add(t);
     }
@@ -637,13 +641,26 @@ export function generateDayForecast(
     const overlapPenalty =
       maxTicketOverlap >= 3 ? -2500 * (maxTicketOverlap - 2) : 0;
 
-    // 2. Conviction score sum + Master Core Pool concentration
+    // 2. Conviction score sum + Master Core Pool concentration + Balanced 5x6 Frequency Cap
     let convictionSum = 0;
     let masterHits = 0;
     let lagRepeatHits = 0;
+    let frequencyBalanceBonus = 0;
     for (const n of cand) {
       convictionSum += getBallConviction(n);
-      if (masterSet.has(n)) masterHits++;
+      const used = ballUsageCount.get(n) ?? 0;
+      if (masterSet.has(n)) {
+        masterHits++;
+        // Across 5 tickets of 6 numbers (30 ball-slots), each of the 14 Master Pool balls
+        // should ideally appear 2 times (at most 3 times) for maximum t=3 wheeling coverage.
+        if (used === 0 || used === 1) {
+          frequencyBalanceBonus += 28;
+        } else if (used >= 3) {
+          frequencyBalanceBonus -= 180 * (used - 2);
+        }
+      } else if (used >= 2) {
+        frequencyBalanceBonus -= 140 * (used - 1);
+      }
       if (lagUnionSet.has(n)) lagRepeatHits++;
     }
 
@@ -679,6 +696,7 @@ export function generateDayForecast(
       convictionSum +
       masterHits * 32 +
       lagBonus +
+      frequencyBalanceBonus +
       newTriplets * 18 +
       newMasterTriplets * 35 +
       overlapPenalty
@@ -699,20 +717,6 @@ export function generateDayForecast(
       allowWideSum: slot === 5,
     });
 
-    // Select deterministic 7th Bao-7 Bonus Anchor on Power 6/55 days from highest-conviction remaining balls
-    let bonusAnchor: number | undefined;
-    if (gameType === "6/55") {
-      const candidatePool =
-        slot === 2
-          ? [...masterCorePool, ...cfg.coldOverduePool, ...cfg.hotPool]
-          : [...masterCorePool, ...cfg.hotPool, ...cfg.coldOverduePool];
-      const uniqueRemaining = Array.from(new Set(candidatePool)).filter(
-        (x) => !sc.includes(x)
-      );
-      bonusAnchor =
-        uniqueRemaining[(slot - 1 + seedSalt) % uniqueRemaining.length];
-    }
-
     return {
       slot,
       strategyCode,
@@ -722,7 +726,6 @@ export function generateDayForecast(
       gameType,
       targetDate: targetDateStr,
       numbers: sc,
-      bonusAnchor,
       deltas: report.deltas,
       stepDeltas: report.stepDeltas,
       totalSpread: report.totalSpread,

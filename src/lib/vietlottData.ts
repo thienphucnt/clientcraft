@@ -790,6 +790,8 @@ function computeCausalSignalsForSlice(
   const d0 = historySlice[0]?.numbers ?? [];
   const d1 = historySlice[1]?.numbers ?? [];
   const d2 = historySlice[2]?.numbers ?? [];
+  const b0 = historySlice[0]?.bonus;
+  const b1 = historySlice[1]?.bonus;
   const set0 = new Set(d0);
   const set1 = new Set(d1);
   const set2 = new Set(d2);
@@ -798,21 +800,24 @@ function computeCausalSignalsForSlice(
 
   const rawSignals = [];
   for (let b = 1; b <= maxNum; b++) {
-    // 1. Short-Window W5 & W10 Exponential Surge
+    // 1. Short-Window W5 & W10 Exponential Surge (includes Power 6/55 Bonus Ball appearances for 6-number JP2 & main crossover)
     let expSurge = 0;
     const w10Len = Math.min(10, historySlice.length);
     for (let j = 0; j < w10Len; j++) {
       if (historySlice[j].numbers.includes(b)) {
         expSurge += Math.pow(0.82, j);
+      } else if (historySlice[j].bonus === b) {
+        expSurge += 0.55 * Math.pow(0.82, j);
       }
     }
     const shortSurge = Math.min(1, expSurge / 2.2);
 
-    // 2. Lag-1, Lag-2 & Lag-3 Repeat Carryover Signal
-    // Empirical Oct 2026 Vietlott data shows extraordinary Lag-1 & Lag-2 repeat clustering
+    // 2. Lag-1, Lag-2 & Lag-3 Repeat Carryover Signal (plus Bonus->Main transition carryover on Power 6/55)
     let lagRepeat = 0;
     if (set0.has(b)) lagRepeat += 0.55;
+    if (b0 === b) lagRepeat += 0.42;
     if (set1.has(b)) lagRepeat += 0.68;
+    if (b1 === b) lagRepeat += 0.38;
     if (set2.has(b)) lagRepeat += 0.32;
     lagRepeat = Math.min(1, lagRepeat);
 
@@ -959,10 +964,13 @@ export function buildDynamicGameConfigForDate(
 
   const walkForwardSteps = Math.min(18, Math.max(0, priorDraws.length - 4));
   const learningRate = 0.35;
-  const expectedTop14Hits = (6 * 14) / maxNum; // ~1.87 for 6/45, ~1.53 for 6/55
+  const effectiveTargetBalls = gameType === "6/55" ? 6.5 : 6;
+  const expectedTop14Hits = (effectiveTargetBalls * 14) / maxNum;
 
   for (let step = walkForwardSteps; step >= 1; step--) {
-    const targetOutcome = new Set(priorDraws[step - 1].numbers);
+    const targetDraw = priorDraws[step - 1];
+    const targetOutcome = new Set(targetDraw.numbers);
+    const targetBonus = targetDraw.bonus;
     const historyAtStep = priorDraws.slice(step);
     const sigs = computeCausalSignalsForSlice(historyAtStep, maxNum, baseCfg);
 
@@ -982,9 +990,15 @@ export function buildDynamicGameConfigForDate(
       const top14 = [...sigs]
         .sort((a, b) => b[key] - a[key] || a.ball - b.ball)
         .slice(0, 14);
-      const hitsCount = top14.filter((item) =>
+      const mainHits = top14.filter((item) =>
         targetOutcome.has(item.ball)
       ).length;
+      const bonusHit =
+        targetBonus !== undefined &&
+        top14.some((item) => item.ball === targetBonus)
+          ? 0.5
+          : 0;
+      const hitsCount = mainHits + bonusHit;
       const advantage = (hitsCount - expectedTop14Hits) / 6;
       weights[key] =
         weights[key] *
