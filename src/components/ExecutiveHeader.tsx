@@ -42,7 +42,7 @@ export function ExecutiveHeader({
   megaConfig,
 }: ExecutiveHeaderProps) {
   const [clock, setClock] = useState(() =>
-    getICTTelemetryClock(new Date("2026-10-28T08:00:00+07:00"))
+    getICTTelemetryClock(new Date("2026-10-30T19:45:00+07:00"))
   );
 
   useEffect(() => {

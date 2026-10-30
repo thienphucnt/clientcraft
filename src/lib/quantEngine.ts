@@ -3,6 +3,7 @@ import {
   GameConfig,
   GameType,
   HistoricalDraw,
+  LearnedFactorWeights,
   MEGA_645_SEED_DRAWS,
   POWER_655_SEED_DRAWS,
 } from "@/data/empiricalSeed2026";
@@ -95,6 +96,11 @@ export interface DayScheduleForecast {
   calibratedFromDrawId?: string;
   calibratedFromDrawDate?: string;
   settledActualDraw?: HistoricalDraw;
+  masterCorePool?: number[];
+  learnedWeights?: LearnedFactorWeights;
+  wheelTripletsCovered?: number;
+  bestTicketMatchCount?: number;
+  masterPoolHitsCount?: number;
   cutoffTimeICT: string;
   broadcastWindowICT: string;
   seedHash: string;
@@ -571,6 +577,114 @@ export function generateDayForecast(
     customDraws: sourceDraws,
   };
 
+  // =========================================================================
+  // v2.0 SELF-LEARNING CONVICTION WEIGHTS & t=3 ABBREVIATED COVERING WHEEL
+  // Concentrates high-conviction balls into a 14-Ball Master Pool and coordinates
+  // the 5 daily tickets so they maximize distinct 3-ball combination coverage
+  // (100 distinct triplets across 5 tickets) with maxTicketOverlap <= 2.
+  // =========================================================================
+  const masterCorePool = cfg.masterCorePool ?? cfg.hotPool.slice(0, 14);
+  const masterSet = new Set(masterCorePool);
+  const lagUnionSet = new Set([
+    ...(cfg.recentDrawsTop2[0] ?? []),
+    ...(cfg.recentDrawsTop2[1] ?? []),
+  ]);
+
+  const getBallConviction = (b: number): number => {
+    const raw = cfg.allBallConvictionMap?.[b] ?? 80;
+    return attenuatedNumbers.has(b) ? Math.round(raw * 0.88) : raw;
+  };
+
+  const getWeightsForPool = (pool: number[]): number[] =>
+    pool.map((b) => getBallConviction(b));
+
+  const coveredTriplets = new Set<string>();
+  const selectedTicketsList: number[][] = [];
+
+  const getTripletsOfTicket = (nums: number[]): string[] => {
+    const sc = [...nums].sort((a, b) => a - b);
+    const out: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      for (let j = i + 1; j < 5; j++) {
+        for (let k = j + 1; k < 6; k++) {
+          out.push(`${sc[i]}-${sc[j]}-${sc[k]}`);
+        }
+      }
+    }
+    return out;
+  };
+
+  const registerSelectedTicket = (nums: number[]) => {
+    const sc = [...nums].sort((a, b) => a - b);
+    selectedTicketsList.push(sc);
+    for (const t of getTripletsOfTicket(sc)) {
+      coveredTriplets.add(t);
+    }
+  };
+
+  const scoreCandidateWheelFit = (cand: number[]): number => {
+    // 1. Check overlap with already selected tickets on the same day
+    let maxTicketOverlap = 0;
+    for (const prev of selectedTicketsList) {
+      let ov = 0;
+      for (const n of cand) {
+        if (prev.includes(n)) ov++;
+      }
+      if (ov > maxTicketOverlap) maxTicketOverlap = ov;
+    }
+    // Strongly penalize sharing >= 3 numbers with another ticket on the same day
+    // so every ticket covers 20 brand-new 3-number combinations!
+    const overlapPenalty =
+      maxTicketOverlap >= 3 ? -2500 * (maxTicketOverlap - 2) : 0;
+
+    // 2. Conviction score sum + Master Core Pool concentration
+    let convictionSum = 0;
+    let masterHits = 0;
+    let lagRepeatHits = 0;
+    for (const n of cand) {
+      convictionSum += getBallConviction(n);
+      if (masterSet.has(n)) masterHits++;
+      if (lagUnionSet.has(n)) lagRepeatHits++;
+    }
+
+    // Empirical Lag-1/Lag-2 Repeat Anchor Bonus (1 to 2 repeats from last 2 draws is optimal)
+    const lagBonus =
+      lagRepeatHits === 1 || lagRepeatHits === 2
+        ? 110
+        : lagRepeatHits === 3
+        ? 45
+        : 0;
+
+    // 3. Marginal t=3 Triplet Coverage Gain
+    let newTriplets = 0;
+    let newMasterTriplets = 0;
+    const sc = [...cand].sort((a, b) => a - b);
+    for (let i = 0; i < 4; i++) {
+      for (let j = i + 1; j < 5; j++) {
+        for (let k = j + 1; k < 6; k++) {
+          const key = `${sc[i]}-${sc[j]}-${sc[k]}`;
+          if (!coveredTriplets.has(key)) {
+            newTriplets++;
+            const mCount =
+              (masterSet.has(sc[i]) ? 1 : 0) +
+              (masterSet.has(sc[j]) ? 1 : 0) +
+              (masterSet.has(sc[k]) ? 1 : 0);
+            if (mCount >= 2) newMasterTriplets++;
+          }
+        }
+      }
+    }
+
+    return (
+      convictionSum +
+      masterHits * 32 +
+      lagBonus +
+      newTriplets * 18 +
+      newMasterTriplets * 35 +
+      overlapPenalty
+    );
+  };
+
   const buildBallotObject = (
     slot: 1 | 2 | 3 | 4 | 5,
     strategyCode: StrategyCode,
@@ -585,15 +699,18 @@ export function generateDayForecast(
       allowWideSum: slot === 5,
     });
 
-    // Select deterministic 7th Bao-7 Bonus Anchor on Power 6/55 days
+    // Select deterministic 7th Bao-7 Bonus Anchor on Power 6/55 days from highest-conviction remaining balls
     let bonusAnchor: number | undefined;
     if (gameType === "6/55") {
       const candidatePool =
         slot === 2
-          ? [...cfg.coldOverduePool, ...cfg.hotPool]
-          : [...cfg.hotPool, ...cfg.coldOverduePool];
-      const remaining = candidatePool.filter((x) => !sc.includes(x));
-      bonusAnchor = remaining[(slot * 3 + seedSalt) % remaining.length];
+          ? [...masterCorePool, ...cfg.coldOverduePool, ...cfg.hotPool]
+          : [...masterCorePool, ...cfg.hotPool, ...cfg.coldOverduePool];
+      const uniqueRemaining = Array.from(new Set(candidatePool)).filter(
+        (x) => !sc.includes(x)
+      );
+      bonusAnchor =
+        uniqueRemaining[(slot - 1 + seedSalt) % uniqueRemaining.length];
     }
 
     return {
@@ -622,35 +739,41 @@ export function generateDayForecast(
   };
 
   // =========================================================================
-  // STRATEGY 1 (HOT_MOMENTUM): Weighted sampling from top-momentum balls + pairwise co-occurrence affinity
+  // STRATEGY 1 (HOT_MOMENTUM): Concentrated Master Pool + Companion Affinity Anchor
+  // Evaluates 250+ weighted candidates from the self-learned Master Core & Hot Pool
   // =========================================================================
   let bestSlot1: number[] | null = null;
-  let bestSlot1Lift = -1;
-  for (let attempt = 0; attempt < 1500; attempt++) {
-    const cand = rng.sampleWeightedWithoutReplacement(
-      cfg.hotPool,
-      adjustedHotWeights,
-      6
-    );
+  let bestSlot1Score = -Infinity;
+  const s1Pool = Array.from(
+    new Set([...masterCorePool, ...cfg.hotPool.slice(0, 18)])
+  );
+  const s1Weights = getWeightsForPool(s1Pool);
+
+  let validS1Count = 0;
+  for (let attempt = 0; attempt < 1800 && validS1Count < 180; attempt++) {
+    const cand = rng.sampleWeightedWithoutReplacement(s1Pool, s1Weights, 6);
     const sig = cand.join(",");
     if (
       !usedSignatures.has(sig) &&
       passesCombinatorialSieve(cand, gameType, sieveOpts)
     ) {
+      validS1Count++;
       const rep = inspectCombinatorialSieve(cand, gameType, sieveOpts);
-      if (rep.affinityLiftScore > bestSlot1Lift) {
-        bestSlot1Lift = rep.affinityLiftScore;
+      const score =
+        scoreCandidateWheelFit(cand) + rep.affinityLiftScore * 160;
+      if (score > bestSlot1Score) {
+        bestSlot1Score = score;
         bestSlot1 = cand;
       }
-      if (attempt >= 25 && bestSlot1) break;
     }
   }
   if (!bestSlot1) {
-    // Fallback across allNums if needed
     for (let attempt = 0; attempt < 2000; attempt++) {
-      const cand = rng
-        .sampleWithoutReplacement(allNums, 6)
-        .sort((a, b) => a - b);
+      const cand = rng.sampleWeightedWithoutReplacement(
+        allNums,
+        getWeightsForPool(allNums),
+        6
+      );
       if (passesCombinatorialSieve(cand, gameType, sieveOpts)) {
         bestSlot1 = cand;
         break;
@@ -659,63 +782,85 @@ export function generateDayForecast(
   }
   if (bestSlot1) {
     usedSignatures.add(bestSlot1.join(","));
+    registerSelectedTicket(bestSlot1);
     ballots.push(
       buildBallotObject(
         1,
         "HOT_MOMENTUM",
-        "Hot Momentum & Companion Affinity",
+        "Self-Learned Master Core & Companion Wheel",
         "HOT MOMENTUM",
-        "Weighted sampling from upper-quantile multi-horizon momentum balls maximizing pairwise co-occurrence lift.",
+        "Concentrated sampling from the 14-Ball Walk-Forward Master Pool maximizing companion lift & Lag-1/2 carryover.",
         bestSlot1
       )
     );
   }
 
   // =========================================================================
-  // STRATEGY 2 (COLD_REBOUND): Locks 2 overdue/skip-gap numbers paired with 4 balanced pivot numbers passing the 6 gates
+  // STRATEGY 2 (COLD_REBOUND): Locks 2 High-Hazard Rebound balls + 4 Master Core Pivots
+  // Coordinated with t=3 Abbreviated Wheel (maxTicketOverlap <= 2)
   // =========================================================================
   let slot2Nums: number[] | null = null;
-  for (let attempt = 0; attempt < 2500; attempt++) {
-    const coldPicks = rng.sampleWithoutReplacement(cfg.coldOverduePool, 2);
+  let bestSlot2Score = -Infinity;
+  const topColdPool = cfg.coldOverduePool.slice(0, 8);
+  const topColdWeights = topColdPool.map(
+    (b, idx) => getBallConviction(b) + (8 - idx) * 18
+  );
+
+  let validS2Count = 0;
+  for (let attempt = 0; attempt < 2400 && validS2Count < 160; attempt++) {
+    const coldPicks = rng.sampleWeightedWithoutReplacement(
+      topColdPool,
+      topColdWeights,
+      2
+    );
     const remPool = allNums.filter((x) => !coldPicks.includes(x));
-    const pivots = rng.sampleWithoutReplacement(remPool, 4);
+    const remWeights = getWeightsForPool(remPool);
+    const pivots = rng.sampleWeightedWithoutReplacement(remPool, remWeights, 4);
     const cand = [...coldPicks, ...pivots].sort((a, b) => a - b);
     const sig = cand.join(",");
     if (
       !usedSignatures.has(sig) &&
       passesCombinatorialSieve(cand, gameType, sieveOpts)
     ) {
-      slot2Nums = cand;
-      break;
+      validS2Count++;
+      const score = scoreCandidateWheelFit(cand);
+      if (score > bestSlot2Score) {
+        bestSlot2Score = score;
+        slot2Nums = cand;
+      }
     }
   }
   if (slot2Nums) {
     usedSignatures.add(slot2Nums.join(","));
+    registerSelectedTicket(slot2Nums);
     ballots.push(
       buildBallotObject(
         2,
         "COLD_REBOUND",
-        "Overdue Skip-Gap Rebound (Lô Gan)",
+        "Overdue Skip-Gap Rebound + Master Wheel",
         "COLD REBOUND",
-        "Locks 2 top-decile Survival Hazard overdue numbers paired with 4 high-stability equilibrium pivots.",
+        "Pairs 2 peak Survival-Hazard rebound numbers with 4 high-conviction Master Core anchors (t=3 wheeled).",
         slot2Nums
       )
     );
   }
 
   // =========================================================================
-  // STRATEGY 3 (DELTA_SYSTEM): Generates 6 first-difference deltas (1 in [1..4], 2 in [2..8], 1 in [7..10], 2 in [8..13/15]),
-  // permutes step deltas, computes prefix sums, and enforces total spread >= 24 (6/45) or >= 30 (6/55)
+  // STRATEGY 3 (DELTA_SYSTEM): First-Difference Delta Chains Optimized for Conviction & t=3 Wheel
+  // Evaluates up to 160 valid delta chains to maximize Master Pool triplet coverage
   // =========================================================================
   let slot3Nums: number[] | null = null;
-  for (let attempt = 0; attempt < 3500; attempt++) {
-    const d1 = rng.nextInt(1, 4);
+  let bestSlot3Score = -Infinity;
+  let validS3Count = 0;
+
+  for (let attempt = 0; attempt < 3500 && validS3Count < 160; attempt++) {
+    const d1 = rng.nextInt(1, 7);
     const stepDeltas = rng.shuffle([
+      rng.nextInt(1, 7),
       rng.nextInt(2, 8),
-      rng.nextInt(2, 8),
-      rng.nextInt(7, 10),
-      rng.nextInt(8, cfg.maxDeltaStep),
-      rng.nextInt(8, cfg.maxDeltaStep),
+      rng.nextInt(5, 10),
+      rng.nextInt(6, cfg.maxDeltaStep),
+      rng.nextInt(6, cfg.maxDeltaStep),
     ]);
     const cand = [d1];
     for (const s of stepDeltas) {
@@ -729,19 +874,23 @@ export function generateDayForecast(
       !usedSignatures.has(sig) &&
       passesCombinatorialSieve(cand, gameType, sieveOpts)
     ) {
-      slot3Nums = cand;
-      break;
+      validS3Count++;
+      const score = scoreCandidateWheelFit(cand);
+      if (score > bestSlot3Score) {
+        bestSlot3Score = score;
+        slot3Nums = cand;
+      }
     }
   }
   if (!slot3Nums) {
-    // Relaxed delta step fallback still enforcing spread >= minDeltaSpread and 6 gates
     for (let attempt = 0; attempt < 3000; attempt++) {
-      const cand = rng
-        .sampleWithoutReplacement(allNums, 6)
-        .sort((a, b) => a - b);
+      const cand = rng.sampleWeightedWithoutReplacement(
+        allNums,
+        getWeightsForPool(allNums),
+        6
+      );
       const sig = cand.join(",");
       if (
-        cand[0] <= 6 &&
         cand[5] - cand[0] >= cfg.minDeltaSpread &&
         !usedSignatures.has(sig) &&
         passesCombinatorialSieve(cand, gameType, sieveOpts)
@@ -753,43 +902,51 @@ export function generateDayForecast(
   }
   if (slot3Nums) {
     usedSignatures.add(slot3Nums.join(","));
+    registerSelectedTicket(slot3Nums);
     ballots.push(
       buildBallotObject(
         3,
         "DELTA_SYSTEM",
-        "Delta Harmonic Spacing System",
+        "Delta Harmonic Spacing + t=3 Wheel",
         "DELTA SYSTEM",
-        `Constructed in first-difference Delta space (δ₁..δ₆) with permuted step intervals and spread ≥ ${cfg.minDeltaSpread}.`,
+        `Optimizes first-difference Delta chains (spread ≥ ${cfg.minDeltaSpread}) for maximum Master Pool conviction & triplet coverage.`,
         slot3Nums
       )
     );
   }
 
   // =========================================================================
-  // STRATEGY 4 (GOLDEN_EQUILIBRIUM): Enforces 3O-3E or 4O-2E parity, 3L-3H split,
-  // and sum within Mean ± 10 ([128, 148] for 6/45; [158, 178] for 6/55)
+  // STRATEGY 4 (GOLDEN_EQUILIBRIUM): 3O-3E / 4O-2E & 3L-3H Weighted by Self-Learned Conviction
+  // Evaluates up to 160 Golden Corridor candidates to maximize t=3 wheel coverage
   // =========================================================================
   const lowOdd = allNums.filter((x) => x <= cfg.midPoint && x % 2 !== 0);
   const lowEven = allNums.filter((x) => x <= cfg.midPoint && x % 2 === 0);
   const highOdd = allNums.filter((x) => x > cfg.midPoint && x % 2 !== 0);
   const highEven = allNums.filter((x) => x > cfg.midPoint && x % 2 === 0);
 
+  const wLowOdd = getWeightsForPool(lowOdd);
+  const wLowEven = getWeightsForPool(lowEven);
+  const wHighOdd = getWeightsForPool(highOdd);
+  const wHighEven = getWeightsForPool(highEven);
+
   let slot4Nums: number[] | null = null;
-  for (let attempt = 0; attempt < 3500; attempt++) {
-    // Alternate between 3O-3E (33.5% modal peak) and 4O-2E (25.1% asymmetric peak) while keeping 3L-3H
+  let bestSlot4Score = -Infinity;
+  let validS4Count = 0;
+
+  for (let attempt = 0; attempt < 3500 && validS4Count < 160; attempt++) {
     const use4Odd = attempt % 3 === 1;
     const cand = use4Odd
       ? [
-          ...rng.sampleWithoutReplacement(lowOdd, 2),
-          ...rng.sampleWithoutReplacement(lowEven, 1),
-          ...rng.sampleWithoutReplacement(highOdd, 2),
-          ...rng.sampleWithoutReplacement(highEven, 1),
+          ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 2),
+          ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 1),
+          ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 2),
+          ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 1),
         ].sort((a, b) => a - b)
       : [
-          ...rng.sampleWithoutReplacement(lowOdd, 2),
-          ...rng.sampleWithoutReplacement(lowEven, 1),
-          ...rng.sampleWithoutReplacement(highOdd, 1),
-          ...rng.sampleWithoutReplacement(highEven, 2),
+          ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 2),
+          ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 1),
+          ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 1),
+          ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 2),
         ].sort((a, b) => a - b);
 
     const sum = cand.reduce((acc, v) => acc + v, 0);
@@ -800,79 +957,97 @@ export function generateDayForecast(
       !usedSignatures.has(sig) &&
       passesCombinatorialSieve(cand, gameType, sieveOpts)
     ) {
-      slot4Nums = cand;
-      break;
+      validS4Count++;
+      const score = scoreCandidateWheelFit(cand);
+      if (score > bestSlot4Score) {
+        bestSlot4Score = score;
+        slot4Nums = cand;
+      }
     }
   }
   if (slot4Nums) {
     usedSignatures.add(slot4Nums.join(","));
+    registerSelectedTicket(slot4Nums);
     ballots.push(
       buildBallotObject(
         4,
         "GOLDEN_EQUILIBRIUM",
-        "Golden Mean Combinatorial Equilibrium",
+        "Golden Equilibrium + Conviction Wheel",
         "GOLDEN EQUILIBRIUM",
-        `Enforces modal 3O-3E / 4O-2E parity, exact 3L-3H split, and tight Gaussian core sum within [${cfg.goldenCorridor[0]}, ${cfg.goldenCorridor[1]}].`,
+        `Conviction-weighted 3O-3E / 4O-2E parity, 3L-3H split, and Gaussian core sum [${cfg.goldenCorridor[0]}, ${cfg.goldenCorridor[1]}] with t=3 wheeling.`,
         slot4Nums
       )
     );
   }
 
   // =========================================================================
-  // STRATEGY 5 (ANTI_SPLIT_EV): Selects >= 4 numbers above calendar birthday range
-  // (>= 27 for 6/45; >= 32 for 6/55) paired with 2 low anchors to maximize solo-jackpot EV
+  // STRATEGY 5 (ANTI_SPLIT_EV): High-Zone Anti-Split Weighted by Self-Learned Conviction
+  // Prioritizes hot/repeating upper-range numbers (>= 27 for 6/45; >= 32 for 6/55)
   // =========================================================================
   const upperAntiSplitPool = allNums.filter((x) => x >= cfg.antiSplitCutoff);
   const lowerAnchorPool = allNums.filter((x) => x <= cfg.midPoint);
+  const wUpper = getWeightsForPool(upperAntiSplitPool);
+  const wLower = getWeightsForPool(lowerAnchorPool);
 
   let slot5Nums: number[] | null = null;
-  for (let attempt = 0; attempt < 3500; attempt++) {
-    const highPicks = rng.sampleWithoutReplacement(upperAntiSplitPool, 4);
-    const lowPicks = rng.sampleWithoutReplacement(lowerAnchorPool, 2);
+  let bestSlot5Score = -Infinity;
+  let validS5Count = 0;
+
+  for (let attempt = 0; attempt < 3500 && validS5Count < 160; attempt++) {
+    const highPicks = rng.sampleWeightedWithoutReplacement(
+      upperAntiSplitPool,
+      wUpper,
+      4
+    );
+    const lowPicks = rng.sampleWeightedWithoutReplacement(
+      lowerAnchorPool,
+      wLower,
+      2
+    );
     const cand = [...lowPicks, ...highPicks].sort((a, b) => a - b);
     const sig = cand.join(",");
     if (
       !usedSignatures.has(sig) &&
       passesCombinatorialSieve(cand, gameType, {
         ...sieveOpts,
-        allowWideSum: false,
+        allowWideSum: true,
       })
     ) {
-      slot5Nums = cand;
-      break;
-    }
-  }
-  if (!slot5Nums) {
-    // Allow 80% sum corridor if 70% corridor was tight
-    for (let attempt = 0; attempt < 2500; attempt++) {
-      const highPicks = rng.sampleWithoutReplacement(upperAntiSplitPool, 4);
-      const lowPicks = rng.sampleWithoutReplacement(lowerAnchorPool, 2);
-      const cand = [...lowPicks, ...highPicks].sort((a, b) => a - b);
-      const sig = cand.join(",");
-      if (
-        !usedSignatures.has(sig) &&
-        passesCombinatorialSieve(cand, gameType, {
-          ...sieveOpts,
-          allowWideSum: true,
-        })
-      ) {
+      validS5Count++;
+      const score = scoreCandidateWheelFit(cand);
+      if (score > bestSlot5Score) {
+        bestSlot5Score = score;
         slot5Nums = cand;
-        break;
       }
     }
   }
   if (slot5Nums) {
     usedSignatures.add(slot5Nums.join(","));
+    registerSelectedTicket(slot5Nums);
     ballots.push(
       buildBallotObject(
         5,
         "ANTI_SPLIT_EV",
-        "Contrarian Anti-Split EV Optimizer",
+        "Anti-Split High-Zone Conviction Wheel",
         "ANTI-SPLIT EV",
-        `Selects ≥ 4 numbers above calendar birthday bias (≥ ${cfg.antiSplitCutoff}) with 2 low anchors (2L-4H) to protect solo-jackpot equity.`,
+        `Conviction-weighted upper-range selection (≥ 4 balls ≥ ${cfg.antiSplitCutoff}) maximizing solo-jackpot EV & t=3 triplet coverage.`,
         slot5Nums
       )
     );
+  }
+
+  // Compute settled draw hit metrics if settledActualDraw is available
+  let bestTicketMatchCount: number | undefined;
+  let masterPoolHitsCount: number | undefined;
+  if (settledActualDraw) {
+    const actualSet = new Set(settledActualDraw.numbers);
+    masterPoolHitsCount = masterCorePool.filter((n) =>
+      actualSet.has(n)
+    ).length;
+    bestTicketMatchCount = ballots.reduce((maxH, b) => {
+      const h = b.numbers.filter((n) => actualSet.has(n)).length;
+      return Math.max(maxH, h);
+    }, 0);
   }
 
   return {
@@ -888,6 +1063,11 @@ export function generateDayForecast(
     calibratedFromDrawId: `#${cfg.latestDrawId}`,
     calibratedFromDrawDate: cfg.latestDrawDate,
     settledActualDraw,
+    masterCorePool,
+    learnedWeights: cfg.learnedWeights,
+    wheelTripletsCovered: coveredTriplets.size,
+    bestTicketMatchCount,
+    masterPoolHitsCount,
     cutoffTimeICT: cfg.cutoffTimeICT,
     broadcastWindowICT: cfg.broadcastWindowICT,
     seedHash,
