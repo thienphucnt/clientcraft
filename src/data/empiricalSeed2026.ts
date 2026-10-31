@@ -89,9 +89,9 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     gameType: "6/55",
     name: "Power 6/55",
     vietnameseName: "Vietlott Power 6/55",
-    latestDrawId: "01417",
-    latestDrawDate: "2026-10-29",
-    nextDrawId: "01418",
+    latestDrawId: "01418",
+    latestDrawDate: "2026-10-31",
+    nextDrawId: "01419",
     maxNum: 55,
     midPoint: 27,
     totalCombinations: 28989675,
@@ -99,9 +99,9 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     minJackpot1Vnd: 30_000_000_000,
     minJackpot2Vnd: 3_000_000_000,
     spilloverThresholdVnd: 300_000_000_000,
-    currentJackpot1Vnd: 33_944_640_150,
-    currentJackpot2Vnd: 4_675_557_550,
-    seedMultiplier: 1.13,
+    currentJackpot1Vnd: 36_604_726_050,
+    currentJackpot2Vnd: 4_971_122_650,
+    seedMultiplier: 1.22,
     meanSum: 168.0,
     stdDevSum: 37.04,
     minPossibleSum: 21,
@@ -117,17 +117,26 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     cutoffTimeICT: "17:30",
     broadcastWindowICT: "18:00–18:30",
     hotPool: [
-      41, 22, 34, 9, 18, 7, 14, 27, 31, 50, 45, 12, 19, 24, 44, 1, 11, 13, 20,
-      23, 30, 35,
+      18, 11, 27, 9, 28, 45, 23, 13, 7, 25, 50, 12, 31, 1, 55, 38, 46, 14, 24,
+      29, 37, 6,
     ],
     hotWeights: [
-      209, 208, 199, 196, 188, 186, 184, 183, 182, 181, 179, 179, 176, 175, 174,
-      185, 184, 178, 173, 172, 171, 170,
+      196, 178, 166, 161, 155, 147, 140, 139, 137, 131, 121, 119, 119, 118, 117,
+      114, 113, 103, 103, 102, 101, 100,
     ],
-    coldOverduePool: [8, 32, 3, 43, 49, 54, 5, 15, 26, 2, 40],
+    coldOverduePool: [3, 32, 47, 8, 15, 43, 49, 48, 36, 4, 5, 54],
+    masterCorePool: [18, 11, 27, 9, 28, 45, 23, 13, 7, 25, 50, 12, 31, 1],
+    learnedWeights: {
+      shortSurge: 0.1967,
+      lagRepeat: 0.1875,
+      companionLift: 0.174,
+      multiHorizon: 0.1921,
+      survivalRebound: 0.1477,
+      neighborMagnet: 0.102,
+    },
     recentDrawsTop2: [
+      [12, 18, 22, 26, 28, 55], // #01418 (2026-10-31)
       [9, 29, 33, 38, 45, 46], // #01417 (2026-10-29)
-      [9, 18, 27, 28, 31, 35], // #01416 (2026-10-27)
     ],
   },
   "6/45": {
@@ -174,9 +183,25 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
 };
 
 /**
- * Tier 2 Built-In Empirical Seed Database (Updated through Oct 30, 2026; automatically superseded by Tier 1 Live Sync)
+ * Tier 2 Built-In Empirical Seed Database (Updated through Oct 31, 2026; automatically superseded by Tier 1 Live Sync)
  */
 export const POWER_655_SEED_DRAWS: HistoricalDraw[] = [
+  {
+    id: "01418",
+    date: "2026-10-31",
+    weekday: "Saturday",
+    gameType: "6/55",
+    numbers: [12, 18, 22, 26, 28, 55],
+    bonus: 11,
+    sum: 161,
+    oddEven: "1O-5E",
+    lowHigh: "4L-2H",
+    consecPairs: 0,
+    jackpot1Vnd: 36_604_726_050,
+    jackpot2Vnd: 4_971_122_650,
+    jp1Winners: 0,
+    jp2Winners: 0,
+  },
   {
     id: "01417",
     date: "2026-10-29",
@@ -703,17 +728,17 @@ export const MEGA_645_SEED_DRAWS: HistoricalDraw[] = [
 ];
 
 export const POWER_655_FREQUENCY_LEADERS = [
-  { ball: 41, hitsAllTime: 209, hitsW150: 25, hitsW100: 17, hitsW50: 10, hitsW20: 5, hitsW10: 2, skipGap: 1, regime: "HOT" as const, note: "#1 All-Time Leader (Hit in #01415)" },
-  { ball: 22, hitsAllTime: 208, hitsW150: 23, hitsW100: 15, hitsW50: 8, hitsW20: 3, hitsW10: 1, skipGap: 10, regime: "HOT" as const, note: "#2 All-Time Leader" },
-  { ball: 34, hitsAllTime: 199, hitsW150: 23, hitsW100: 16, hitsW50: 9, hitsW20: 4, hitsW10: 2, skipGap: 2, regime: "HOT" as const, note: "#3 All-Time Frequency (Hit in #01414)" },
-  { ball: 8,  hitsAllTime: 196, hitsW150: 19, hitsW100: 12, hitsW50: 5, hitsW20: 0, hitsW10: 0, skipGap: 21, regime: "OVERDUE" as const, note: "Dual-State Outlier: #4 All-Time yet 21-draw skip drought" },
-  { ball: 9,  hitsAllTime: 195, hitsW150: 22, hitsW100: 15, hitsW50: 8, hitsW20: 3, hitsW10: 1, skipGap: 0, regime: "HOT" as const, note: "Hit in latest Draw #01416" },
-  { ball: 18, hitsAllTime: 188, hitsW150: 23, hitsW100: 16, hitsW50: 9, hitsW20: 5, hitsW10: 3, skipGap: 0, regime: "HOT" as const, note: "Back-to-back hits in #01415 & #01416" },
-  { ball: 7,  hitsAllTime: 186, hitsW150: 23, hitsW100: 16, hitsW50: 9, hitsW20: 6, hitsW10: 3, skipGap: 1, regime: "HOT" as const, note: "Hit in #01415 Jackpot win" },
-  { ball: 27, hitsAllTime: 183, hitsW150: 21, hitsW100: 15, hitsW50: 8, hitsW20: 5, hitsW10: 2, skipGap: 0, regime: "HOT" as const, note: "Hit in latest Draw #01416" },
-  { ball: 31, hitsAllTime: 182, hitsW150: 21, hitsW100: 15, hitsW50: 8, hitsW20: 4, hitsW10: 3, skipGap: 0, regime: "HOT" as const, note: "Hit in #01414 & #01416" },
-  { ball: 50, hitsAllTime: 181, hitsW150: 20, hitsW100: 14, hitsW50: 8, hitsW20: 4, hitsW10: 3, skipGap: 1, regime: "HOT" as const, note: "Hit in #01413, #01415 & Bonus #01416" },
-  { ball: 32, hitsAllTime: 151, hitsW150: 14, hitsW100: 10, hitsW50: 4, hitsW20: 0, hitsW10: 0, skipGap: 18, regime: "OVERDUE" as const, note: "18 consecutive draws absent" },
+  { ball: 41, hitsAllTime: 209, hitsW150: 25, hitsW100: 17, hitsW50: 10, hitsW20: 5, hitsW10: 2, skipGap: 2, regime: "HOT" as const, note: "#1 All-Time Leader (Hit in #01415)" },
+  { ball: 22, hitsAllTime: 209, hitsW150: 24, hitsW100: 16, hitsW50: 9, hitsW20: 4, hitsW10: 2, skipGap: 0, regime: "HOT" as const, note: "#2 All-Time Leader (Hit in #01418)" },
+  { ball: 34, hitsAllTime: 199, hitsW150: 23, hitsW100: 16, hitsW50: 9, hitsW20: 4, hitsW10: 2, skipGap: 3, regime: "HOT" as const, note: "#3 All-Time Frequency (Hit in #01414)" },
+  { ball: 8,  hitsAllTime: 196, hitsW150: 19, hitsW100: 12, hitsW50: 5, hitsW20: 0, hitsW10: 0, skipGap: 22, regime: "OVERDUE" as const, note: "Dual-State Outlier: #4 All-Time yet 22-draw skip drought" },
+  { ball: 18, hitsAllTime: 189, hitsW150: 24, hitsW100: 17, hitsW50: 10, hitsW20: 6, hitsW10: 4, skipGap: 0, regime: "HOT" as const, note: "Hits in #01415, #01416 & #01418" },
+  { ball: 9,  hitsAllTime: 195, hitsW150: 22, hitsW100: 15, hitsW50: 8, hitsW20: 3, hitsW10: 2, skipGap: 1, regime: "HOT" as const, note: "Hit in #01416 & #01417" },
+  { ball: 7,  hitsAllTime: 186, hitsW150: 23, hitsW100: 16, hitsW50: 9, hitsW20: 6, hitsW10: 3, skipGap: 2, regime: "HOT" as const, note: "Hit in #01415 Jackpot win" },
+  { ball: 27, hitsAllTime: 183, hitsW150: 21, hitsW100: 15, hitsW50: 8, hitsW20: 5, hitsW10: 2, skipGap: 1, regime: "HOT" as const, note: "Hit in Draw #01416" },
+  { ball: 31, hitsAllTime: 182, hitsW150: 21, hitsW100: 15, hitsW50: 8, hitsW20: 4, hitsW10: 3, skipGap: 1, regime: "HOT" as const, note: "Hit in #01414 & #01416" },
+  { ball: 50, hitsAllTime: 181, hitsW150: 20, hitsW100: 14, hitsW50: 8, hitsW20: 4, hitsW10: 3, skipGap: 2, regime: "HOT" as const, note: "Hit in #01413, #01415 & Bonus #01416" },
+  { ball: 32, hitsAllTime: 151, hitsW150: 14, hitsW100: 10, hitsW50: 4, hitsW20: 0, hitsW10: 0, skipGap: 19, regime: "OVERDUE" as const, note: "19 consecutive draws absent" },
 ];
 
 export const MEGA_645_TELEMETRY_LEADERS = [

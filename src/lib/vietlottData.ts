@@ -23,6 +23,9 @@ export interface RawNDJsonRecord {
 export interface LiveJackpotScrapeResult {
   gameType: GameType;
   drawId?: string;
+  date?: string;
+  numbers?: number[];
+  bonus?: number;
   jackpot1Vnd?: number;
   jackpot2Vnd?: number;
   jp1Winners?: number;
@@ -474,29 +477,71 @@ export function parseMinhNgocJackpots(
     return Number.isFinite(val) && val > 0 ? val : undefined;
   };
 
+  const idMatch =
+    html.match(/id="DT6X[45]5_KY_VE"[^>]*>\s*#?(\d+)/i) ||
+    html.match(/Kỳ vé:\s*<span[^>]*>#?(\d+)/i);
+
+  const dateMatch =
+    html.match(/Ng(?:à|&agrave;)y quay thưởng\s*(\d{1,2}\/\d{1,2}\/\d{4})/i) ||
+    html.match(/NGÀY:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
+
+  let dateIso: string | undefined = undefined;
+  if (dateMatch) {
+    const parts = dateMatch[1].split("/");
+    if (parts.length === 3) {
+      dateIso = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+    }
+  }
+
+  const firstUl = html.match(/<ul class="result-number">[\s\S]*?<\/ul>/i);
+  let mainNums: number[] | undefined = undefined;
+  let bonusNum: number | undefined = undefined;
+
+  if (firstUl) {
+    const ballMatches = [
+      ...firstUl[0].matchAll(/<div class="finnish(\d) bool">(\d+)<\/div>/g),
+    ];
+    const main: number[] = [];
+    for (const m of ballMatches) {
+      const pos = parseInt(m[1], 10);
+      const val = parseInt(m[2], 10);
+      if (pos >= 1 && pos <= 6) {
+        main.push(val);
+      } else if (pos === 7) {
+        bonusNum = val;
+      }
+    }
+    if (main.length === 6) {
+      mainNums = main.sort((a, b) => a - b);
+    }
+  }
+
   if (gameType === "6/55") {
-    const idMatch = html.match(/id="DT6X55_KY_VE"[^>]*>\s*#?(\d+)/i);
-    const jp1Match = html.match(/id="DT6X55_G_JACKPOT"[^>]*>\s*([0-9.,]+)/i);
+    const jp1Match = html.match(/id="DT6X[45]5_G_JACKPOT"[^>]*>\s*([0-9.,]+)/i);
     const jp2Match = html.match(/id="DT6X55_G_JACKPOT2"[^>]*>\s*([0-9.,]+)/i);
-    const w1Match = html.match(/id="DT6X55_S_JACKPOT"[^>]*>\s*(\d+)/i);
+    const w1Match = html.match(/id="DT6X[45]5_S_JACKPOT"[^>]*>\s*(\d+)/i);
     const w2Match = html.match(/id="DT6X55_S_JACKPOT2"[^>]*>\s*(\d+)/i);
 
     return {
       gameType,
       drawId: idMatch?.[1] ? String(idMatch[1]).padStart(5, "0") : undefined,
+      date: dateIso,
+      numbers: mainNums,
+      bonus: bonusNum,
       jackpot1Vnd: parseDigits(jp1Match?.[1]),
       jackpot2Vnd: parseDigits(jp2Match?.[1]),
       jp1Winners: w1Match?.[1] !== undefined ? Number(w1Match[1]) : undefined,
       jp2Winners: w2Match?.[1] !== undefined ? Number(w2Match[1]) : undefined,
     };
   } else {
-    const idMatch = html.match(/id="DT6X45_KY_VE"[^>]*>\s*#?(\d+)/i);
-    const jp1Match = html.match(/id="DT6X45_G_JACKPOT"[^>]*>\s*([0-9.,]+)/i);
-    const w1Match = html.match(/id="DT6X45_S_JACKPOT"[^>]*>\s*(\d+)/i);
+    const jp1Match = html.match(/id="DT6X[45]5_G_JACKPOT"[^>]*>\s*([0-9.,]+)/i);
+    const w1Match = html.match(/id="DT6X[45]5_S_JACKPOT"[^>]*>\s*(\d+)/i);
 
     return {
       gameType,
       drawId: idMatch?.[1] ? String(idMatch[1]).padStart(5, "0") : undefined,
+      date: dateIso,
+      numbers: mainNums,
       jackpot1Vnd: parseDigits(jp1Match?.[1]),
       jp1Winners: w1Match?.[1] !== undefined ? Number(w1Match[1]) : undefined,
     };

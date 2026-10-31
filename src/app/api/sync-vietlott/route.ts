@@ -78,6 +78,40 @@ export async function GET() {
 
     // Merge Tier 1 live NDJSON records with Tier 2 October 2026 Empirical Seed Database
     const powerMap = new Map(parsedPower.map((d) => [d.id, d]));
+    if (
+      livePowerJp?.drawId &&
+      livePowerJp.numbers &&
+      livePowerJp.numbers.length === 6 &&
+      !powerMap.has(livePowerJp.drawId)
+    ) {
+      const drawDate = livePowerJp.date || syncedAt.slice(0, 10);
+      const dObj = new Date(`${drawDate}T00:00:00+07:00`);
+      const weekday = dObj.toLocaleDateString("en-US", {
+        weekday: "long",
+        timeZone: "Asia/Ho_Chi_Minh",
+      });
+      const sum = livePowerJp.numbers.reduce((acc, v) => acc + v, 0);
+      const odds = livePowerJp.numbers.filter((n) => n % 2 !== 0).length;
+      const lows = livePowerJp.numbers.filter((n) => n <= 27).length;
+      powerMap.set(livePowerJp.drawId, {
+        id: livePowerJp.drawId,
+        date: drawDate,
+        weekday,
+        gameType: "6/55",
+        numbers: livePowerJp.numbers,
+        bonus: livePowerJp.bonus,
+        sum,
+        oddEven: `${odds}O-${6 - odds}E`,
+        lowHigh: `${lows}L-${6 - lows}H`,
+        consecPairs: 0,
+        jackpot1Vnd: livePowerJp.jackpot1Vnd || 36_604_726_050,
+        jackpot2Vnd: livePowerJp.jackpot2Vnd || 4_971_122_650,
+        jp1Winners: livePowerJp.jp1Winners ?? 0,
+        jp2Winners: livePowerJp.jp2Winners ?? 0,
+        isJackpotWon: (livePowerJp.jp1Winners ?? 0) > 0,
+      });
+    }
+
     for (const seedDraw of POWER_655_SEED_DRAWS) {
       const existing = powerMap.get(seedDraw.id);
       if (!existing) {
@@ -113,6 +147,36 @@ export async function GET() {
     );
 
     const megaMap = new Map(parsedMega.map((d) => [d.id, d]));
+    if (
+      liveMegaJp?.drawId &&
+      liveMegaJp.numbers &&
+      liveMegaJp.numbers.length === 6 &&
+      !megaMap.has(liveMegaJp.drawId)
+    ) {
+      const drawDate = liveMegaJp.date || syncedAt.slice(0, 10);
+      const dObj = new Date(`${drawDate}T00:00:00+07:00`);
+      const weekday = dObj.toLocaleDateString("en-US", {
+        weekday: "long",
+        timeZone: "Asia/Ho_Chi_Minh",
+      });
+      const sum = liveMegaJp.numbers.reduce((acc, v) => acc + v, 0);
+      const odds = liveMegaJp.numbers.filter((n) => n % 2 !== 0).length;
+      const lows = liveMegaJp.numbers.filter((n) => n <= 22).length;
+      megaMap.set(liveMegaJp.drawId, {
+        id: liveMegaJp.drawId,
+        date: drawDate,
+        weekday,
+        gameType: "6/45",
+        numbers: liveMegaJp.numbers,
+        sum,
+        oddEven: `${odds}O-${6 - odds}E`,
+        lowHigh: `${lows}L-${6 - lows}H`,
+        consecPairs: 0,
+        jackpot1Vnd: liveMegaJp.jackpot1Vnd || 20_852_928_000,
+        jp1Winners: liveMegaJp.jp1Winners ?? 0,
+        isJackpotWon: (liveMegaJp.jp1Winners ?? 0) > 0,
+      });
+    }
     for (const seedDraw of MEGA_645_SEED_DRAWS) {
       const existing = megaMap.get(seedDraw.id);
       if (!existing) {
