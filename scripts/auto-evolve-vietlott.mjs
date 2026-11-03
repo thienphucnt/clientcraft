@@ -139,12 +139,25 @@ function evaluateSubModelHitRate(draws, maxNum) {
   let lagRepeatHits = 0;
   let neighborHits = 0;
   let shortSurgeHits = 0;
+  let sandwichBridgeHits = 0;
+  let emptyDecadeHits = 0;
   let evaluatedDraws = 0;
+  const maxDec = Math.floor((maxNum - 1) / 10);
 
   for (let idx = 5; idx < draws.length; idx++) {
     const target = draws[idx].result.slice(0, 6).map(Number);
-    const prev1 = new Set(draws[idx - 1].result.slice(0, 6).map(Number));
-    const prev2 = new Set(draws[idx - 2].result.slice(0, 6).map(Number));
+    const prev1Main = draws[idx - 1].result.slice(0, 6).map(Number);
+    const prev1 = new Set(draws[idx - 1].result.map(Number));
+    const prev2 = new Set(draws[idx - 2].result.map(Number));
+    const pool2 = new Set([...prev1, ...prev2]);
+
+    const emptyDecs = new Set();
+    for (let d = 0; d <= maxDec; d++) {
+      if (!prev1Main.some((x) => Math.floor((x - 1) / 10) === d)) {
+        emptyDecs.add(d);
+      }
+    }
+
     const prev5Counts = new Map();
     for (let k = idx - 5; k < idx; k++) {
       for (const n of draws[k].result.slice(0, 6).map(Number)) {
@@ -156,8 +169,49 @@ function evaluateSubModelHitRate(draws, maxNum) {
       if (prev1.has(ball) || prev2.has(ball)) lagRepeatHits++;
       if (prev1.has(ball - 1) || prev1.has(ball + 1)) neighborHits++;
       if ((prev5Counts.get(ball) || 0) >= 2) shortSurgeHits++;
+      if (
+        (pool2.has(ball - 1) && pool2.has(ball + 1)) ||
+        (pool2.has(ball - 2) && pool2.has(ball + 2))
+      ) {
+        sandwichBridgeHits++;
+      }
+      if (emptyDecs.has(Math.floor((ball - 1) / 10))) {
+        emptyDecadeHits++;
+      }
     }
     evaluatedDraws++;
+  }
+
+  // Also attribute the newest draw's winning balls
+  const newest = draws.at(-1);
+  const p1 = draws.at(-2);
+  const p2 = draws.at(-3);
+  let latestDrawAttribution = null;
+  if (newest && p1 && p2) {
+    const p1Main = p1.result.slice(0, 6).map(Number);
+    const pool2 = new Set([...p1.result.map(Number), ...p2.result.map(Number)]);
+    const emptyDecs = [];
+    for (let d = 0; d <= maxDec; d++) {
+      if (!p1Main.some((x) => Math.floor((x - 1) / 10) === d)) emptyDecs.push(d);
+    }
+    const targetMain = newest.result.slice(0, 6).map(Number);
+    latestDrawAttribution = {
+      drawId: newest.id,
+      date: newest.date,
+      emptyDecadesInPrevDraw: emptyDecs,
+      emptyDecadeReboundWinners: targetMain.filter((b) =>
+        emptyDecs.includes(Math.floor((b - 1) / 10))
+      ),
+      sandwichBridgeWinners: targetMain.filter(
+        (b) =>
+          (pool2.has(b - 1) && pool2.has(b + 1)) ||
+          (pool2.has(b - 2) && pool2.has(b + 2))
+      ),
+      lag1To2RepeatWinners: targetMain.filter((b) => pool2.has(b)),
+      neighborShiftWinners: targetMain.filter(
+        (b) => pool2.has(b - 1) || pool2.has(b + 1)
+      ),
+    };
   }
 
   return {
@@ -166,6 +220,9 @@ function evaluateSubModelHitRate(draws, maxNum) {
     avgLagRepeatPerDraw: +(lagRepeatHits / evaluatedDraws).toFixed(2),
     avgNeighborShiftPerDraw: +(neighborHits / evaluatedDraws).toFixed(2),
     avgShortSurgePerDraw: +(shortSurgeHits / evaluatedDraws).toFixed(2),
+    avgSandwichBridgePerDraw: +(sandwichBridgeHits / evaluatedDraws).toFixed(2),
+    avgEmptyDecadeReboundPerDraw: +(emptyDecadeHits / evaluatedDraws).toFixed(2),
+    latestDrawAttribution,
   };
 }
 

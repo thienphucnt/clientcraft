@@ -42,6 +42,8 @@ export interface LearnedFactorWeights {
   multiHorizon: number; // W20 / W50 / W100 / W150 momentum
   survivalRebound: number; // Log-normal skip-gap rebound hazard
   neighborMagnet: number; // ±1 adjacent number shift magnet
+  bridgeMidpoint?: number; // Sandwich midpoint bridge (b-1 & b+1 or b-2 & b+2 across last 2-3 draws)
+  decadeRebound?: number; // Empty-decade hypergeometric mean-reversion surge
 }
 
 export interface GameConfig {

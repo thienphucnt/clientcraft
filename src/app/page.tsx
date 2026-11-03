@@ -6,6 +6,7 @@ import {
   JackpotTelemetryBanner,
 } from "@/components/ExecutiveHeader";
 import { RollingForecastMatrix } from "@/components/RollingForecastMatrix";
+import { RetrospectivePostMortem } from "@/components/RetrospectivePostMortem";
 import { SieveInspectorAndBaoCalculator } from "@/components/SieveInspectorAndBaoCalculator";
 import { EmpiricalTelemetryCharts } from "@/components/EmpiricalTelemetryCharts";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/lib/vietlottData";
 import {
   CalendarDays,
+  History,
   SearchCheck,
   BarChart3,
   Smartphone,
@@ -335,6 +337,13 @@ export default function VietlottQuantMatrixDashboard() {
             <span>7-Day Ballot Matrix (30 Sets)</span>
           </a>
           <a
+            href="#section-retrospective-postmortem"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/25 hover:bg-indigo-500/20 shrink-0 transition-colors"
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Jackpot Day Retrospectives</span>
+          </a>
+          <a
             href="#sieve-inspector-section"
             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-500/15 hover:text-indigo-600 dark:hover:text-indigo-400 shrink-0 transition-colors"
           >
@@ -367,6 +376,12 @@ export default function VietlottQuantMatrixDashboard() {
             onToggleSimulateDraw1413={() => setSimulateNextDraw((prev) => !prev)}
           />
         </div>
+
+        {/* 2B. Jackpot Day Retrospective & Self-Evolving Algorithm Post-Mortem */}
+        <RetrospectivePostMortem
+          powerDraws={effectivePowerDraws}
+          megaDraws={effectiveMegaDraws}
+        />
 
         {/* 3. Custom Ballot Sieve Inspector & System Play ("Chơi Bao") Calculator */}
         <SieveInspectorAndBaoCalculator

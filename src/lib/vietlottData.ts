@@ -815,10 +815,10 @@ export function getICTTelemetryClock(now: Date = new Date()) {
 }
 
 /**
- * Compute 6 normalized quantitative signals in [0, 1] for all balls 1..maxNum
+ * Compute 8 normalized quantitative & retrospective signals in [0, 1] for all balls 1..maxNum
  * given a strictly causal historical slice `historySlice` (sorted newest-first).
  */
-function computeCausalSignalsForSlice(
+export function computeCausalSignalsForSlice(
   historySlice: HistoricalDraw[],
   maxNum: number,
   baseCfg: GameConfig
@@ -830,6 +830,8 @@ function computeCausalSignalsForSlice(
   multiHorizon: number;
   survivalRebound: number;
   neighborMagnet: number;
+  bridgeMidpoint: number;
+  decadeRebound: number;
   skipGap: number;
 }> {
   const d0 = historySlice[0]?.numbers ?? [];
@@ -837,11 +839,35 @@ function computeCausalSignalsForSlice(
   const d2 = historySlice[2]?.numbers ?? [];
   const b0 = historySlice[0]?.bonus;
   const b1 = historySlice[1]?.bonus;
+  const b2 = historySlice[2]?.bonus;
   const set0 = new Set(d0);
   const set1 = new Set(d1);
   const set2 = new Set(d2);
   const recentUnion = new Set([...d0, ...d1]);
+  const recentPool2WithBonus = new Set([
+    ...d0,
+    ...(b0 !== undefined ? [b0] : []),
+    ...d1,
+    ...(b1 !== undefined ? [b1] : []),
+  ]);
+  const recentPool3WithBonus = new Set([
+    ...recentPool2WithBonus,
+    ...d2,
+    ...(b2 !== undefined ? [b2] : []),
+  ]);
   const window120 = historySlice.slice(0, 120);
+
+  // Precompute decade counts in d0 and d1 for Empty-Decade Mean-Reversion (Factor 8)
+  const decadeCount0 = new Map<number, number>();
+  const decadeCount1 = new Map<number, number>();
+  for (const x of d0) {
+    const dec = Math.floor((x - 1) / 10);
+    decadeCount0.set(dec, (decadeCount0.get(dec) ?? 0) + 1);
+  }
+  for (const x of d1) {
+    const dec = Math.floor((x - 1) / 10);
+    decadeCount1.set(dec, (decadeCount1.get(dec) ?? 0) + 1);
+  }
 
   const rawSignals = [];
   for (let b = 1; b <= maxNum; b++) {
@@ -909,16 +935,48 @@ function computeCausalSignalsForSlice(
     }
     const rScore = computeSurvivalHazardScore(skipGap, maxNum);
     const restedHotBonus =
-      skipGap >= 2 && skipGap <= 6 && (hits.w20 >= 3 || baseIdx >= 0 && baseIdx < 12)
+      skipGap >= 2 && skipGap <= 6 && (hits.w20 >= 3 || (baseIdx >= 0 && baseIdx < 12))
         ? 0.28
         : 0;
     const survivalRebound = Math.min(1, rScore / 1.35 + restedHotBonus);
 
-    // 6. Neighbor ±1 Shift Magnet (captures adjacent step transitions e.g. 27->28->29, 40->41)
+    // 6. Neighbor ±1 Shift Magnet (captures adjacent step transitions e.g. 27->28->29, 40->41, Bonus±1)
     let neighborMagnet = 0;
-    if (set0.has(b - 1) || set0.has(b + 1)) neighborMagnet += 0.58;
-    if (set1.has(b - 1) || set1.has(b + 1)) neighborMagnet += 0.42;
+    if (set0.has(b - 1) || set0.has(b + 1) || b0 === b - 1 || b0 === b + 1)
+      neighborMagnet += 0.58;
+    if (set1.has(b - 1) || set1.has(b + 1) || b1 === b - 1 || b1 === b + 1)
+      neighborMagnet += 0.42;
     neighborMagnet = Math.min(1, neighborMagnet);
+
+    // 7. Retrospective Factor: Sandwich Midpoint Bridge (b-1 & b+1 or b-2 & b+2 across last 2-3 draws)
+    // Discovered in Power 6/55 #01419 where 10=(09+11)/2, 31=(29+33)/2, and 54=(53+55)/2 all hit simultaneously!
+    let bridgeMidpoint = 0;
+    if (recentPool2WithBonus.has(b - 1) && recentPool2WithBonus.has(b + 1)) {
+      bridgeMidpoint += 0.72;
+    }
+    if (recentPool2WithBonus.has(b - 2) && recentPool2WithBonus.has(b + 2)) {
+      bridgeMidpoint += 0.55;
+    }
+    if (recentPool3WithBonus.has(b - 1) && recentPool3WithBonus.has(b + 1)) {
+      bridgeMidpoint += 0.28;
+    }
+    bridgeMidpoint = Math.min(1, bridgeMidpoint);
+
+    // 8. Retrospective Factor: Empty-Decade Hypergeometric Mean-Reversion Surge
+    // Discovered in Mega 6/45 #01583 (4/6 winners from empty Decades 10-19 & 30-39) and Power 6/55 #01419 (3/6 winners from empty Decades 30-39 & 40-49)
+    const dec = Math.floor((b - 1) / 10);
+    const c0 = decadeCount0.get(dec) ?? 0;
+    const c1 = decadeCount1.get(dec) ?? 0;
+    let decadeRebound = 0.3;
+    if (c0 === 0 && c1 === 0) {
+      decadeRebound = 0.92;
+    } else if (c0 === 0) {
+      decadeRebound = 0.75;
+    } else if (c0 === 1 && c1 === 0) {
+      decadeRebound = 0.46;
+    } else if (c0 >= 3) {
+      decadeRebound = 0.14;
+    }
 
     rawSignals.push({
       ball: b,
@@ -928,6 +986,8 @@ function computeCausalSignalsForSlice(
       multiHorizon,
       survivalRebound,
       neighborMagnet,
+      bridgeMidpoint,
+      decadeRebound,
       skipGap,
     });
   }
@@ -993,24 +1053,37 @@ export function buildDynamicGameConfigForDate(
   );
 
   // =========================================================================
-  // ONLINE WALK-FORWARD MULTIPLICATIVE-WEIGHTS LEARNER (Hedge / Exp3)
-  // Evaluates the 6 sub-models across the most recent completed draws and updates
-  // factor weights proportionally to out-of-sample hit performance.
+  // v3.0 RETROSPECTIVE WALK-FORWARD MULTIPLICATIVE-WEIGHTS LEARNER (8-Factor Hedge)
+  // Evaluates the 8 causal & retrospective sub-models across recent completed draws
+  // and updates factor weights proportionally to out-of-sample hit performance.
   // =========================================================================
   const maxNum = baseCfg.maxNum;
-  const weights: LearnedFactorWeights = {
-    shortSurge: 0.22,
-    lagRepeat: 0.22,
-    companionLift: 0.16,
-    multiHorizon: 0.16,
-    survivalRebound: 0.12,
-    neighborMagnet: 0.12,
+  const weights: Required<LearnedFactorWeights> = {
+    shortSurge: 0.17,
+    lagRepeat: 0.18,
+    companionLift: 0.13,
+    multiHorizon: 0.13,
+    survivalRebound: 0.1,
+    neighborMagnet: 0.11,
+    bridgeMidpoint: 0.09,
+    decadeRebound: 0.09,
   };
 
   const walkForwardSteps = Math.min(18, Math.max(0, priorDraws.length - 4));
-  const learningRate = 0.35;
+  const learningRate = 0.36;
   const effectiveTargetBalls = gameType === "6/55" ? 6.5 : 6;
   const expectedTop14Hits = (effectiveTargetBalls * 14) / maxNum;
+
+  const factorKeys: Array<keyof Required<LearnedFactorWeights>> = [
+    "shortSurge",
+    "lagRepeat",
+    "companionLift",
+    "multiHorizon",
+    "survivalRebound",
+    "neighborMagnet",
+    "bridgeMidpoint",
+    "decadeRebound",
+  ];
 
   for (let step = walkForwardSteps; step >= 1; step--) {
     const targetDraw = priorDraws[step - 1];
@@ -1018,15 +1091,6 @@ export function buildDynamicGameConfigForDate(
     const targetBonus = targetDraw.bonus;
     const historyAtStep = priorDraws.slice(step);
     const sigs = computeCausalSignalsForSlice(historyAtStep, maxNum, baseCfg);
-
-    const factorKeys: Array<keyof LearnedFactorWeights> = [
-      "shortSurge",
-      "lagRepeat",
-      "companionLift",
-      "multiHorizon",
-      "survivalRebound",
-      "neighborMagnet",
-    ];
 
     // Recency emphasis: more recent draws carry higher learning weight
     const recencyMultiplier = Math.pow(0.92, step - 1);
@@ -1080,7 +1144,9 @@ export function buildDynamicGameConfigForDate(
       weights.companionLift * sig.companionLift +
       weights.multiHorizon * sig.multiHorizon +
       weights.survivalRebound * sig.survivalRebound +
-      weights.neighborMagnet * sig.neighborMagnet;
+      weights.neighborMagnet * sig.neighborMagnet +
+      weights.bridgeMidpoint * sig.bridgeMidpoint +
+      weights.decadeRebound * sig.decadeRebound;
 
     // Scale conviction weight into [25 .. 260] so weighted sampling strongly favors high-conviction numbers
     const convictionWeight = Math.max(
@@ -1094,7 +1160,10 @@ export function buildDynamicGameConfigForDate(
       ball: sig.ball,
       convictionWeight,
       hazardScore:
-        rScore + (sig.skipGap >= 7 ? 0.35 : 0) + sig.survivalRebound * 0.4,
+        rScore +
+        (sig.skipGap >= 7 ? 0.35 : 0) +
+        sig.survivalRebound * 0.4 +
+        sig.decadeRebound * 0.25,
     });
   }
 
