@@ -34,7 +34,7 @@ import {
 
 export default function VietlottQuantMatrixDashboard() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [anchorDate, setAnchorDate] = useState<string>("2026-11-03");
+  const [anchorDate, setAnchorDate] = useState<string>("2026-11-04");
   const [seedSalt, setSeedSalt] = useState<number>(0);
   const [simulateNextDraw, setSimulateNextDraw] = useState<boolean>(false);
   const [inspectedBallot, setInspectedBallot] =

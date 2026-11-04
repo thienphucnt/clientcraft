@@ -172,7 +172,7 @@ export async function GET() {
         oddEven: `${odds}O-${6 - odds}E`,
         lowHigh: `${lows}L-${6 - lows}H`,
         consecPairs: 0,
-        jackpot1Vnd: liveMegaJp.jackpot1Vnd || 23_200_118_500,
+        jackpot1Vnd: liveMegaJp.jackpot1Vnd || 26_087_005_500,
         jp1Winners: liveMegaJp.jp1Winners ?? 0,
         isJackpotWon: (liveMegaJp.jp1Winners ?? 0) > 0,
       });
@@ -204,8 +204,8 @@ export async function GET() {
     const responsePayload: SyncStatusResponse = {
       tier: "TIER_1_LIVE_CLOUD_HYBRID",
       syncedAt,
-      power655TotalDraws: Math.max(1416, powerLinesCount, mergedPower.length),
-      mega645TotalDraws: Math.max(1580, megaLinesCount, mergedMega.length),
+      power655TotalDraws: Math.max(1419, powerLinesCount, mergedPower.length),
+      mega645TotalDraws: Math.max(1584, megaLinesCount, mergedMega.length),
       latestPowerDraw: mergedPower[0] || POWER_655_SEED_DRAWS[0],
       latestMegaDraw: mergedMega[0] || MEGA_645_SEED_DRAWS[0],
       powerDraws: mergedPower,
@@ -221,8 +221,8 @@ export async function GET() {
     const fallbackPayload: SyncStatusResponse = {
       tier: "TIER_2_OFFLINE_SEED_2026",
       syncedAt,
-      power655TotalDraws: 1416,
-      mega645TotalDraws: 1580,
+      power655TotalDraws: 1419,
+      mega645TotalDraws: 1584,
       latestPowerDraw: POWER_655_SEED_DRAWS[0],
       latestMegaDraw: MEGA_645_SEED_DRAWS[0],
       powerDraws: POWER_655_SEED_DRAWS,
