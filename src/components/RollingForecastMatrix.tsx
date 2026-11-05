@@ -57,7 +57,7 @@ export function RollingForecastMatrix({
   const [selectedDayIso, setSelectedDayIso] = useState<string>(anchorDate);
   const [gameFilter, setGameFilter] = useState<"ALL" | "6/55" | "6/45">("ALL");
   const [copiedDayIso, setCopiedDayIso] = useState<string | null>(null);
-  const [liveTodayIso, setLiveTodayIso] = useState<string>("2026-11-04");
+  const [liveTodayIso, setLiveTodayIso] = useState<string>("2026-11-05");
 
   useEffect(() => {
     const clk = getICTTelemetryClock(new Date());

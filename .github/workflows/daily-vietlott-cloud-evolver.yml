@@ -1,0 +1,78 @@
+name: Daily Vietlott QuantMatrix Cloud Auto-Evolver
+
+on:
+  schedule:
+    # 19:10 ICT (12:10 UTC) - Primary post-draw cloud sync & retrospective evolution
+    - cron: "10 12 * * *"
+    # 19:55 ICT (12:55 UTC) - Secondary pass in case upstream NDJSON/MinhNgoc updates late
+    - cron: "55 12 * * *"
+    # 21:15 ICT (14:15 UTC) - Late-evening verification pass
+    - cron: "15 14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vietlott-cloud-auto-evolver
+  cancel-in-progress: false
+
+jobs:
+  cloud-retrospective-and-deploy:
+    name: Sync Settled Draws, Run v3.0 Retrospective & Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository (master)
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Autonomous Cloud Draw Sync, Retrospective & 8-Factor Weight Evolution
+        run: node scripts/cloud-auto-evolve.mjs
+
+      - name: Verify TypeScript Compilation
+        run: npx tsc --noEmit
+
+      - name: Commit & Push Updated Seed, Weights & Retrospective Log to master
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/empiricalSeed2026.ts src/app/page.tsx src/components/ExecutiveHeader.tsx src/components/RollingForecastMatrix.tsx RETROSPECTIVE_CLOUD_LOG.md
+          if ! git diff --cached --quiet; then
+            LATEST_INFO=$(node -e 'const fs=require("fs"); const s=fs.readFileSync("src/data/empiricalSeed2026.ts","utf8"); const p=s.match(/latestDrawId:\s*"(\d+)"/)?.[1]; console.log(p || "latest");')
+            git commit -m "chore(cloud-evolver): autonomous 19:00 ICT draw sync #${LATEST_INFO}, retrospective & 8-factor weight evolution"
+            git push origin master
+          else
+            echo "No new draw changes to commit on master."
+          fi
+
+      - name: Build Static Export for GitHub Pages (STATIC_EXPORT=1)
+        run: |
+          rm -rf .next
+          mv src/app/api _api_backup
+          STATIC_EXPORT=1 npm run build
+          mv _api_backup src/app/api
+          touch out/.nojekyll
+
+      - name: Deploy Static Bundle to gh-pages Branch
+        run: |
+          cd out
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b gh-pages
+          git add -A
+          git commit -m "deploy(cloud-evolver): automated daily cloud build $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
