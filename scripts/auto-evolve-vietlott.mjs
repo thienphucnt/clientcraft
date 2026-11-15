@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Daily Vietlott QuantMatrix Auto-Evolver Telemetry & Live Sync Script
- * Invoked by the scheduled automation at 19:00 Asia/Ho_Chi_Minh (ICT) after the 18:30 draw settles.
+ * Daily Vietlott QuantMatrix Auto-Evolver Telemetry, Live Sync & Missed-Day Catch-Up Detector
+ * Used both by headless background Gemini 4 Argon (High) automation and diagnostics.
  */
 
 import fs from "node:fs";
@@ -9,6 +9,10 @@ import path from "node:path";
 
 const WORKSPACE_ROOT = path.resolve(import.meta.dirname, "..");
 const SEED_FILE = path.join(WORKSPACE_ROOT, "src/data/empiricalSeed2026.ts");
+const RETRO_STATE_FILE = path.join(
+  WORKSPACE_ROOT,
+  "src/data/argonRetrospectiveState.json"
+);
 
 const SOURCES = {
   power655Jsonl:
@@ -21,9 +25,9 @@ const SOURCES = {
     "https://www.minhngoc.net.vn/ket-qua-xo-so/dien-toan-vietlott/mega-6x45.html",
 };
 
-async function fetchJsonlTail(url, count = 25) {
+async function fetchJsonlTail(url, count = 60) {
   const res = await fetch(url, {
-    headers: { "User-Agent": "VietlottQuantMatrixPro-AutoEvolver/2.0" },
+    headers: { "User-Agent": "VietlottQuantMatrixPro-AutoEvolver/3.1" },
   });
   if (!res.ok) {
     throw new Error(`HTTP ${res.status} fetching ${url}`);
@@ -57,7 +61,7 @@ function parseDigits(raw) {
 async function fetchMinhNgocJackpot(url, gameType) {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "VietlottQuantMatrixPro-AutoEvolver/2.0" },
+      headers: { "User-Agent": "VietlottQuantMatrixPro-AutoEvolver/3.1" },
     });
     if (!res.ok) return null;
     const html = await res.text();
@@ -134,6 +138,45 @@ async function fetchMinhNgocJackpot(url, gameType) {
   }
 }
 
+function computeDrawAttributionAtIndex(draws, idx, maxNum) {
+  if (idx < 2 || !draws[idx]) return null;
+  const maxDec = Math.floor((maxNum - 1) / 10);
+  const target = draws[idx];
+  const p1 = draws[idx - 1];
+  const p2 = draws[idx - 2];
+  const p1Main = p1.result.slice(0, 6).map(Number);
+  const pool2 = new Set([...p1.result.map(Number), ...p2.result.map(Number)]);
+  const emptyDecs = [];
+  for (let d = 0; d <= maxDec; d++) {
+    if (!p1Main.some((x) => Math.floor((x - 1) / 10) === d)) emptyDecs.push(d);
+  }
+  const targetMain = target.result.slice(0, 6).map(Number).sort((a, b) => a - b);
+  const targetBonus =
+    maxNum === 55 && target.result.length >= 7
+      ? Number(target.result[6])
+      : undefined;
+
+  return {
+    drawId: String(target.id).padStart(5, "0"),
+    date: target.date,
+    numbers: targetMain,
+    ...(targetBonus !== undefined ? { bonus: targetBonus } : {}),
+    emptyDecadesInPrevDraw: emptyDecs,
+    emptyDecadeReboundWinners: targetMain.filter((b) =>
+      emptyDecs.includes(Math.floor((b - 1) / 10))
+    ),
+    sandwichBridgeWinners: targetMain.filter(
+      (b) =>
+        (pool2.has(b - 1) && pool2.has(b + 1)) ||
+        (pool2.has(b - 2) && pool2.has(b + 2))
+    ),
+    lag1To2RepeatWinners: targetMain.filter((b) => pool2.has(b)),
+    neighborShiftWinners: targetMain.filter(
+      (b) => pool2.has(b - 1) || pool2.has(b + 1)
+    ),
+  };
+}
+
 function evaluateSubModelHitRate(draws, maxNum) {
   if (draws.length < 10) return null;
   let lagRepeatHits = 0;
@@ -182,37 +225,11 @@ function evaluateSubModelHitRate(draws, maxNum) {
     evaluatedDraws++;
   }
 
-  // Also attribute the newest draw's winning balls
-  const newest = draws.at(-1);
-  const p1 = draws.at(-2);
-  const p2 = draws.at(-3);
-  let latestDrawAttribution = null;
-  if (newest && p1 && p2) {
-    const p1Main = p1.result.slice(0, 6).map(Number);
-    const pool2 = new Set([...p1.result.map(Number), ...p2.result.map(Number)]);
-    const emptyDecs = [];
-    for (let d = 0; d <= maxDec; d++) {
-      if (!p1Main.some((x) => Math.floor((x - 1) / 10) === d)) emptyDecs.push(d);
-    }
-    const targetMain = newest.result.slice(0, 6).map(Number);
-    latestDrawAttribution = {
-      drawId: newest.id,
-      date: newest.date,
-      emptyDecadesInPrevDraw: emptyDecs,
-      emptyDecadeReboundWinners: targetMain.filter((b) =>
-        emptyDecs.includes(Math.floor((b - 1) / 10))
-      ),
-      sandwichBridgeWinners: targetMain.filter(
-        (b) =>
-          (pool2.has(b - 1) && pool2.has(b + 1)) ||
-          (pool2.has(b - 2) && pool2.has(b + 2))
-      ),
-      lag1To2RepeatWinners: targetMain.filter((b) => pool2.has(b)),
-      neighborShiftWinners: targetMain.filter(
-        (b) => pool2.has(b - 1) || pool2.has(b + 1)
-      ),
-    };
-  }
+  const latestDrawAttribution = computeDrawAttributionAtIndex(
+    draws,
+    draws.length - 1,
+    maxNum
+  );
 
   return {
     evaluatedDraws,
@@ -226,21 +243,56 @@ function evaluateSubModelHitRate(draws, maxNum) {
   };
 }
 
+function readRetroStateSafe() {
+  try {
+    if (fs.existsSync(RETRO_STATE_FILE)) {
+      return JSON.parse(fs.readFileSync(RETRO_STATE_FILE, "utf8"));
+    }
+  } catch {
+    // Fall back to defaults below
+  }
+  return {
+    lastAuditedPowerDrawId: "00000",
+    lastAuditedMegaDrawId: "00000",
+  };
+}
+
+function getUnAuditedDraws(draws, lastAuditedId, maxNum) {
+  const threshold = Number(lastAuditedId || "0");
+  const list = [];
+  for (let i = 0; i < draws.length; i++) {
+    const idStr = String(draws[i].id).padStart(5, "0");
+    if (Number(idStr) > threshold) {
+      const attr = computeDrawAttributionAtIndex(draws, i, maxNum);
+      list.push(
+        attr ?? {
+          drawId: idStr,
+          date: draws[i].date,
+          numbers: draws[i].result.slice(0, 6).map(Number).sort((a, b) => a - b),
+        }
+      );
+    }
+  }
+  return list;
+}
+
 async function main() {
   const seedText = fs.readFileSync(SEED_FILE, "utf8");
   const allSeedIds = [
     ...seedText.matchAll(/id:\s*"#?(\d{5})"/g),
     ...seedText.matchAll(/latestDrawId:\s*"#?(\d{5})"/g),
   ].map((m) => m[1]);
+  const seedIdSet = new Set(allSeedIds);
+
+  const retroState = readRetroStateSafe();
 
   const [powerData, megaData, powerJp, megaJp] = await Promise.all([
-    fetchJsonlTail(SOURCES.power655Jsonl, 25),
-    fetchJsonlTail(SOURCES.mega645Jsonl, 25),
+    fetchJsonlTail(SOURCES.power655Jsonl, 60),
+    fetchJsonlTail(SOURCES.mega645Jsonl, 60),
     fetchMinhNgocJackpot(SOURCES.minhNgocPower, "6/55"),
     fetchMinhNgocJackpot(SOURCES.minhNgocMega, "6/45"),
   ]);
 
-  // If live Minh Ngoc has a settled draw newer than the GitHub jsonl snapshot, merge it in
   let latestPower = powerData.recentDraws.at(-1);
   if (
     powerJp?.drawId &&
@@ -277,16 +329,41 @@ async function main() {
     latestMega = liveDraw;
   }
 
+  const seedContainsLatestPower = latestPower
+    ? seedIdSet.has(String(latestPower.id).padStart(5, "0"))
+    : false;
+  const seedContainsLatestMega = latestMega
+    ? seedIdSet.has(String(latestMega.id).padStart(5, "0"))
+    : false;
+
+  const unAuditedPowerDraws = getUnAuditedDraws(
+    powerData.recentDraws,
+    retroState.lastAuditedPowerDrawId,
+    55
+  );
+  const unAuditedMegaDraws = getUnAuditedDraws(
+    megaData.recentDraws,
+    retroState.lastAuditedMegaDrawId,
+    45
+  );
+
+  const needsArgonRetrospective =
+    unAuditedPowerDraws.length > 0 ||
+    unAuditedMegaDraws.length > 0 ||
+    !seedContainsLatestPower ||
+    !seedContainsLatestMega;
+
   const report = {
     checkedAtIct: new Date().toLocaleString("sv-SE", {
       timeZone: "Asia/Ho_Chi_Minh",
     }),
-    seedContainsLatestPower: latestPower
-      ? allSeedIds.includes(String(latestPower.id).padStart(5, "0"))
-      : false,
-    seedContainsLatestMega: latestMega
-      ? allSeedIds.includes(String(latestMega.id).padStart(5, "0"))
-      : false,
+    needsArgonRetrospective,
+    lastAuditedPowerDrawId: retroState.lastAuditedPowerDrawId,
+    lastAuditedMegaDrawId: retroState.lastAuditedMegaDrawId,
+    seedContainsLatestPower,
+    seedContainsLatestMega,
+    unAuditedPowerDraws,
+    unAuditedMegaDraws,
     power655: {
       totalHistoricalDraws: powerData.totalDraws,
       latestDraw: latestPower,

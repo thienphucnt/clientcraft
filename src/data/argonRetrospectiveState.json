@@ -1,0 +1,58 @@
+{
+  "lastAuditedPowerDrawId": "01424",
+  "lastAuditedPowerDrawDate": "2026-11-14",
+  "lastAuditedMegaDrawId": "01588",
+  "lastAuditedMegaDrawDate": "2026-11-13",
+  "lastAuditedAtIct": "2026-11-15 10:21:00",
+  "engineVersion": "v3.1-argon-high",
+  "recentAudits": [
+    {
+      "gameType": "6/55",
+      "drawId": "01422",
+      "date": "2026-11-10",
+      "numbers": [1, 2, 21, 38, 39, 51],
+      "bonus": 12,
+      "finding": "2 consecutive pairs (01-02, 38-39) blocked by strict 1-pair gate; relaxed Slot 3 DELTA_SYSTEM & Slot 5 ANTI_SPLIT_EV to allow up to 2 pairs.",
+      "evolvedChanges": ["Gate 4 allowTwoConsecPairs on Slots 3 and 5"]
+    },
+    {
+      "gameType": "6/45",
+      "drawId": "01587",
+      "date": "2026-11-11",
+      "numbers": [3, 11, 14, 23, 25, 43],
+      "finding": "5O-1E tail parity blocked by Gate 2 across all slots.",
+      "evolvedChanges": ["Gate 2 allowSkewParity on Slot 5 ANTI_SPLIT_EV"]
+    },
+    {
+      "gameType": "6/55",
+      "drawId": "01423",
+      "date": "2026-11-12",
+      "numbers": [17, 25, 33, 34, 35, 36],
+      "bonus": 48,
+      "finding": "33-36 cluster left 3 decades (01-10, 41-50, 51-55) empty ahead of #01424; JP2 bonus 48 seeded adjacent 47 in #01424.",
+      "evolvedChanges": ["Include prior bonus balls in quantEngine lagUnionSet"]
+    },
+    {
+      "gameType": "6/45",
+      "drawId": "01588",
+      "date": "2026-11-13",
+      "numbers": [1, 7, 15, 19, 31, 33],
+      "finding": "1 JP1 winner (19.78B VND); 31 & 33 rebounded from empty Decade 31-40 alongside Lag-1/2 repeat 01.",
+      "evolvedChanges": ["Reset Mega 6/45 JP1 to 12B seed and maintain decade rebound + lag weights"]
+    },
+    {
+      "gameType": "6/55",
+      "drawId": "01424",
+      "date": "2026-11-14",
+      "numbers": [5, 28, 36, 42, 45, 47],
+      "bonus": 51,
+      "finding": "1L-5H skew + 4/6 main winners from 3 empty prior decades (05, 42, 45, 47) capped at 2 by wheel scorer + Lag-3 bonus carryover 51.",
+      "evolvedChanges": [
+        "Removed fixed 2-ball empty-decade wheel cap (scales up to 4 when 3+ decades empty)",
+        "Added emptyDecadesCount0 >= 3 surge in computeCausalSignalsForSlice",
+        "Added b2 lagRepeat (+0.25) and set2 neighborMagnet (+0.22)",
+        "Expanded Slot 5 ANTI_SPLIT_EV to sample 4 or 5 high balls with allowHighSkew & allowSkewParity"
+      ]
+    }
+  ]
+}

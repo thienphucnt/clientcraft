@@ -868,6 +868,15 @@ export function computeCausalSignalsForSlice(
     const dec = Math.floor((x - 1) / 10);
     decadeCount1.set(dec, (decadeCount1.get(dec) ?? 0) + 1);
   }
+  const maxDecadeIdx = Math.floor((maxNum - 1) / 10);
+  let emptyDecadesCount0 = 0;
+  if (d0.length > 0) {
+    for (let decIdx = 0; decIdx <= maxDecadeIdx; decIdx++) {
+      if ((decadeCount0.get(decIdx) ?? 0) === 0) {
+        emptyDecadesCount0++;
+      }
+    }
+  }
 
   const rawSignals = [];
   for (let b = 1; b <= maxNum; b++) {
@@ -890,6 +899,7 @@ export function computeCausalSignalsForSlice(
     if (set1.has(b)) lagRepeat += 0.68;
     if (b1 === b) lagRepeat += 0.38;
     if (set2.has(b)) lagRepeat += 0.32;
+    if (b2 === b) lagRepeat += 0.25;
     lagRepeat = Math.min(1, lagRepeat);
 
     // 3. Companion Co-Occurrence Lift with numbers from the last 2 draws
@@ -946,6 +956,7 @@ export function computeCausalSignalsForSlice(
       neighborMagnet += 0.58;
     if (set1.has(b - 1) || set1.has(b + 1) || b1 === b - 1 || b1 === b + 1)
       neighborMagnet += 0.42;
+    if (set2.has(b - 1) || set2.has(b + 1)) neighborMagnet += 0.22;
     neighborMagnet = Math.min(1, neighborMagnet);
 
     // 7. Retrospective Factor: Sandwich Midpoint Bridge (b-1 & b+1 or b-2 & b+2 across last 2-3 draws)
@@ -969,9 +980,9 @@ export function computeCausalSignalsForSlice(
     const c1 = decadeCount1.get(dec) ?? 0;
     let decadeRebound = 0.3;
     if (c0 === 0 && c1 === 0) {
-      decadeRebound = 0.92;
+      decadeRebound = emptyDecadesCount0 >= 3 ? 0.96 : 0.92;
     } else if (c0 === 0) {
-      decadeRebound = 0.75;
+      decadeRebound = emptyDecadesCount0 >= 3 ? 0.84 : 0.75;
     } else if (c0 === 1 && c1 === 0) {
       decadeRebound = 0.46;
     } else if (c0 >= 3) {

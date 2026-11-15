@@ -242,6 +242,8 @@ export function inspectCombinatorialSieve(
   options?: {
     allowWideSum?: boolean;
     allowHighSkew?: boolean;
+    allowSkewParity?: boolean;
+    allowTwoConsecPairs?: boolean;
     customConfig?: GameConfig;
     customDraws?: HistoricalDraw[];
   }
@@ -274,21 +276,21 @@ export function inspectCombinatorialSieve(
     : cfg.corridor70;
   const gate1Passed = isValidInput && sum >= minSum && sum <= maxSum;
 
-  // Gate 2: Odd/Even Parity Equilibrium (2, 3, or 4)
+  // Gate 2: Odd/Even Parity Equilibrium (2, 3, or 4; optionally 1 or 5 for tail slots)
   const oddCount = sc.filter((n) => n % 2 !== 0).length;
   const evenCount = 6 - oddCount;
   const oddEvenLabel = `${oddCount}O-${evenCount}E`;
-  const gate2Passed =
-    isValidInput && (oddCount === 2 || oddCount === 3 || oddCount === 4);
+  const validOdds = options?.allowSkewParity ? [1, 2, 3, 4, 5] : [2, 3, 4];
+  const gate2Passed = isValidInput && validOdds.includes(oddCount);
 
   // Gate 3: Low/High Half-Space Split
   const lowCount = sc.filter((n) => n <= cfg.midPoint).length;
   const highCount = 6 - lowCount;
   const lowHighLabel = `${lowCount}L-${highCount}H`;
-  const validLows = options?.allowHighSkew ? [1, 2, 3, 4] : [2, 3, 4];
+  const validLows = options?.allowHighSkew ? [1, 2, 3, 4, 5] : [2, 3, 4];
   const gate3Passed = isValidInput && validLows.includes(lowCount);
 
-  // Gate 4: Consecutive Adjacency Cap (Max 1 pair, 0 triplets)
+  // Gate 4: Consecutive Adjacency Cap (Max 1 pair normally, or max 2 pairs when allowTwoConsecPairs, 0 triplets)
   let consecPairs = 0;
   for (let i = 0; i < sc.length - 1; i++) {
     if (sc[i + 1] - sc[i] === 1) consecPairs++;
@@ -297,7 +299,9 @@ export function inspectCombinatorialSieve(
   for (let i = 0; i < sc.length - 2; i++) {
     if (sc[i + 2] - sc[i] === 2) hasTriplet = true;
   }
-  const gate4Passed = isValidInput && consecPairs <= 1 && !hasTriplet;
+  const maxConsecAllowed = options?.allowTwoConsecPairs ? 2 : 1;
+  const gate4Passed =
+    isValidInput && consecPairs <= maxConsecAllowed && !hasTriplet;
 
   // Gate 5: Decade & Modulo-10 Dispersion
   const decadesSet = new Set(sc.map((n) => Math.floor((n - 1) / 10)));
@@ -362,9 +366,11 @@ export function inspectCombinatorialSieve(
       name: "Gate 2: Odd/Even Parity Balance",
       passed: gate2Passed,
       actualValue: oddEvenLabel,
-      expectedRule: "2O-4E, 3O-3E, or 4O-2E",
+      expectedRule: options?.allowSkewParity
+        ? "1O-5E to 5O-1E"
+        : "2O-4E, 3O-3E, or 4O-2E",
       detail: gate2Passed
-        ? `Captures the ${gameType === "6/45" ? "81.31%" : "80.72%"} hypergeometric core triad.`
+        ? `Captures the ${gameType === "6/45" ? "81.31%" : "80.72%"} hypergeometric core triad${options?.allowSkewParity ? " (tail skew permitted)" : ""}.`
         : `Extreme parity split (${oddEvenLabel}) resides in the <19% outer tail.`,
     },
     {
@@ -373,9 +379,11 @@ export function inspectCombinatorialSieve(
       name: "Gate 3: Low/High Half-Space Split",
       passed: gate3Passed,
       actualValue: lowHighLabel,
-      expectedRule: `2L-4H, 3L-3H, or 4L-2H (Mid = ${cfg.midPoint})`,
+      expectedRule: options?.allowHighSkew
+        ? `1L-5H to 5L-1H (Mid = ${cfg.midPoint})`
+        : `2L-4H, 3L-3H, or 4L-2H (Mid = ${cfg.midPoint})`,
       detail: gate3Passed
-        ? `Balanced partition across Low (01–${cfg.midPoint}) and High (${cfg.midPoint + 1}–${cfg.maxNum}).`
+        ? `Partition across Low (01–${cfg.midPoint}) and High (${cfg.midPoint + 1}–${cfg.maxNum}) satisfies half-space gate.`
         : `Skewed partition (${lowHighLabel}) violates half-space equilibrium.`,
     },
     {
@@ -384,10 +392,10 @@ export function inspectCombinatorialSieve(
       name: "Gate 4: Consecutive Adjacency Cap",
       passed: gate4Passed,
       actualValue: `${consecPairs} pair(s), ${hasTriplet ? "1+ triplet" : "0 triplets"}`,
-      expectedRule: "≤ 1 consecutive pair & 0 triplets",
+      expectedRule: `≤ ${maxConsecAllowed} consecutive pair${maxConsecAllowed > 1 ? "s" : ""} & 0 triplets`,
       detail: gate4Passed
         ? "Consecutive spacing matches empirical hypergeometric adjacency."
-        : "Excessive adjacent clustering (≥2 pairs or consecutive triplet).",
+        : `Excessive adjacent clustering (>${maxConsecAllowed} pair${maxConsecAllowed > 1 ? "s" : ""} or consecutive triplet).`,
     },
     {
       gateNumber: 5,
@@ -456,6 +464,8 @@ export function passesCombinatorialSieve(
   options?: {
     allowWideSum?: boolean;
     allowHighSkew?: boolean;
+    allowSkewParity?: boolean;
+    allowTwoConsecPairs?: boolean;
     customConfig?: GameConfig;
     customDraws?: HistoricalDraw[];
   }
@@ -586,9 +596,18 @@ export function generateDayForecast(
   // =========================================================================
   const masterCorePool = cfg.masterCorePool ?? cfg.hotPool.slice(0, 14);
   const masterSet = new Set(masterCorePool);
+  const priorSourceDraws = [...sourceDraws]
+    .filter((d) => d.date < targetDateStr)
+    .sort((a, b) => b.date.localeCompare(a.date));
   const lagUnionSet = new Set([
     ...(cfg.recentDrawsTop2[0] ?? []),
     ...(cfg.recentDrawsTop2[1] ?? []),
+    ...(priorSourceDraws[0]?.bonus !== undefined
+      ? [priorSourceDraws[0].bonus]
+      : []),
+    ...(priorSourceDraws[1]?.bonus !== undefined
+      ? [priorSourceDraws[1].bonus]
+      : []),
   ]);
 
   // Identify Empty Decades in the immediately preceding draw (Retrospective Factor 8)
@@ -693,8 +712,10 @@ export function generateDayForecast(
         : 0;
 
     // Retrospective Empty-Decade Mean-Reversion & Sandwich Midpoint Bonus
+    const maxEmptyCap = Math.max(2, Math.min(4, emptyDecadesSet.size));
     const retrospectiveStructuralBonus =
-      Math.min(2, emptyDecadeHits) * 46 + Math.min(2, sandwichBridgeHits) * 42;
+      Math.min(maxEmptyCap, emptyDecadeHits) * 52 +
+      Math.min(3, sandwichBridgeHits) * 46;
 
     // 3. Marginal t=3 Triplet Coverage Gain
     let newTriplets = 0;
@@ -740,6 +761,9 @@ export function generateDayForecast(
     const report = inspectCombinatorialSieve(sc, gameType, {
       ...sieveOpts,
       allowWideSum: slot === 5,
+      allowHighSkew: slot === 5,
+      allowSkewParity: slot === 5,
+      allowTwoConsecPairs: slot === 3 || slot === 5,
     });
 
     return {
@@ -900,7 +924,10 @@ export function generateDayForecast(
       cand[5] <= cfg.maxNum &&
       spread >= cfg.minDeltaSpread &&
       !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType, sieveOpts)
+      passesCombinatorialSieve(cand, gameType, {
+        ...sieveOpts,
+        allowTwoConsecPairs: true,
+      })
     ) {
       validS3Count++;
       const score = scoreCandidateWheelFit(cand);
@@ -921,7 +948,10 @@ export function generateDayForecast(
       if (
         cand[5] - cand[0] >= cfg.minDeltaSpread &&
         !usedSignatures.has(sig) &&
-        passesCombinatorialSieve(cand, gameType, sieveOpts)
+        passesCombinatorialSieve(cand, gameType, {
+          ...sieveOpts,
+          allowTwoConsecPairs: true,
+        })
       ) {
         slot3Nums = cand;
         break;
@@ -1022,15 +1052,17 @@ export function generateDayForecast(
   let validS5Count = 0;
 
   for (let attempt = 0; attempt < 3500 && validS5Count < 160; attempt++) {
+    const highCountPick = attempt % 3 === 0 ? 5 : 4;
+    const lowCountPick = 6 - highCountPick;
     const highPicks = rng.sampleWeightedWithoutReplacement(
       upperAntiSplitPool,
       wUpper,
-      4
+      highCountPick
     );
     const lowPicks = rng.sampleWeightedWithoutReplacement(
       lowerAnchorPool,
       wLower,
-      2
+      lowCountPick
     );
     const cand = [...lowPicks, ...highPicks].sort((a, b) => a - b);
     const sig = cand.join(",");
@@ -1039,6 +1071,9 @@ export function generateDayForecast(
       passesCombinatorialSieve(cand, gameType, {
         ...sieveOpts,
         allowWideSum: true,
+        allowHighSkew: true,
+        allowSkewParity: true,
+        allowTwoConsecPairs: true,
       })
     ) {
       validS5Count++;
