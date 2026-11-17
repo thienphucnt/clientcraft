@@ -1,10 +1,10 @@
 {
-  "lastAuditedPowerDrawId": "01424",
-  "lastAuditedPowerDrawDate": "2026-11-14",
-  "lastAuditedMegaDrawId": "01588",
-  "lastAuditedMegaDrawDate": "2026-11-13",
-  "lastAuditedAtIct": "2026-11-15 10:21:00",
-  "engineVersion": "v3.1-argon-high",
+  "lastAuditedPowerDrawId": "01425",
+  "lastAuditedPowerDrawDate": "2026-11-17",
+  "lastAuditedMegaDrawId": "01589",
+  "lastAuditedMegaDrawDate": "2026-11-15",
+  "lastAuditedAtIct": "2026-11-17 20:35:30",
+  "engineVersion": "v3.3-argon-high",
   "recentAudits": [
     {
       "gameType": "6/55",
@@ -52,6 +52,31 @@
         "Added emptyDecadesCount0 >= 3 surge in computeCausalSignalsForSlice",
         "Added b2 lagRepeat (+0.25) and set2 neighborMagnet (+0.22)",
         "Expanded Slot 5 ANTI_SPLIT_EV to sample 4 or 5 high balls with allowHighSkew & allowSkewParity"
+      ]
+    },
+    {
+      "gameType": "6/45",
+      "drawId": "01589",
+      "date": "2026-11-15",
+      "numbers": [6, 22, 24, 26, 40, 44],
+      "finding": "0O-6E parity mean-reversion after 11/12 Odd drought (#01587 5O-1E + #01588 6O-0E); 5/6 winners (06, 22, 24, 26, 44) shifted ±1 from prior Odd anchors into starved Even parity and empty Decades 21-30 & 41-45 (with 24 bisecting 23-25).",
+      "evolvedChanges": [
+        "Added parityReboundSynergy (+0.095) and catalyzed overdue hazard boost in buildDynamicGameConfigForDate after 6:0 or >=10/12 two-draw parity droughts",
+        "Added parityWheelBonus and ±1 neighbor-shift substitution in scoreCandidateWheelFit",
+        "Elevated #01589 Master Pool coverage from 2/6 to 4/6 (22, 24, 40, 44) and achieved 3/6 Third Prize on Slot 4 (22, 24, 40 + 45 near-1 of 44)"
+      ]
+    },
+    {
+      "gameType": "6/55",
+      "drawId": "01425",
+      "date": "2026-11-17",
+      "numbers": [6, 20, 36, 41, 49, 52],
+      "bonus": 34,
+      "finding": "7/7 exact historical echo of Draw #01420 (2026-11-05: 06-20-34-41-49-52 + Bonus 36) with 34/36 swapped between Main and JP2 Bonus, alongside 1O-5E tail parity and 15 JP2 winners splitting 3.65B VND (243.38M VND each).",
+      "evolvedChanges": [
+        "Added W3-W10 Multi-Anchor Historical Draw Echo (clusterEchoBonus: +0.18 companionLift, +0.16 survivalRebound) in computeCausalSignalsForSlice",
+        "Hardened auto-evolve-vietlott.mjs with ipv4first + PowerShell Invoke-WebRequest fallback and JP2 multi-winner pool aggregation",
+        "Added v3.2 + v3.3 seed and fallback updates through #01425 and zero-window wscript.exe silent launcher"
       ]
     }
   ]

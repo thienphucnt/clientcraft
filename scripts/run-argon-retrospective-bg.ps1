@@ -21,6 +21,42 @@ function Write-Log {
   Write-Output $line
 }
 
+function Invoke-PostAgentGitPushGuarantee {
+  $pendingChanges = (& git status --porcelain -- src/ scripts/ .github/ 2>&1) | Out-String
+  if ([string]::IsNullOrWhiteSpace($pendingChanges)) {
+    return
+  }
+
+  Write-Log "Detected uncommitted workspace changes in src/ scripts/ .github/. Running TypeScript verification & push guarantee..."
+  $prevPref = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $tscOut = (& npx.cmd tsc --noEmit 2>&1) | Out-String
+    $tscExit = $LASTEXITCODE
+    if ($tscExit -ne 0) {
+      Write-Log "Post-Agent tsc --noEmit failed (exit=$tscExit); skipping auto-commit/push: $tscOut"
+      return
+    }
+
+    & git add src/ scripts/ .github/ 2>&1 | Out-Null
+    $staged = (& git diff --cached --name-only 2>&1) | Out-String
+    if (-not [string]::IsNullOrWhiteSpace($staged)) {
+      $commitMsg = "feat(argon-evolver): autonomous Argon High retrospective sync & evolution"
+      $commitOut = (& git commit -m $commitMsg 2>&1) | Out-String
+      Write-Log "Committed changes: $commitOut"
+    }
+
+    $pushOrigin = (& git push origin master 2>&1) | Out-String
+    $pushOriginExit = $LASTEXITCODE
+    $pushVercel = (& git push https://github.com/thienphucnt/clientcraft.git master:vietlott-quantmatrix-pro 2>&1) | Out-String
+    $pushVercelExit = $LASTEXITCODE
+    Write-Log "Push guarantee results: origin(exit=$pushOriginExit), vercel(exit=$pushVercelExit) | $pushOrigin | $pushVercel"
+  }
+  finally {
+    $ErrorActionPreference = $prevPref
+  }
+}
+
 # Rotate log if > 2 MB
 if ((Test-Path $LogFile) -and ((Get-Item $LogFile).Length -gt 2MB)) {
   $ArchiveLog = Join-Path $LogDir "argon-retrospective-bg.prev.log"
@@ -61,9 +97,11 @@ try {
   $telemetryRaw = $null
   $telemetry = $null
   $maxAttempts = 3
+  $prevPref = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     try {
-      $telemetryRaw = & node $TelemetryScript 2>&1 | Out-String
+      $telemetryRaw = (& node $TelemetryScript 2>&1) | Out-String
       if ($LASTEXITCODE -eq 0) {
         $telemetry = $telemetryRaw | ConvertFrom-Json
         break
@@ -76,9 +114,11 @@ try {
       Start-Sleep -Seconds 15
     }
   }
+  $ErrorActionPreference = $prevPref
 
   if (-not $telemetry) {
-    Write-Log "Unable to fetch live Vietlott telemetry after $maxAttempts attempts (offline or upstream timeout). Exiting cleanly to retry on next trigger."
+    Write-Log "Unable to fetch live Vietlott telemetry after $maxAttempts attempts (offline or upstream timeout). Running push guarantee if needed and exiting cleanly."
+    Invoke-PostAgentGitPushGuarantee
     exit 0
   }
 
@@ -87,6 +127,7 @@ try {
   $unAuditedMegaCount = @($telemetry.unAuditedMegaDraws).Count
 
   if ((-not $needsRetro) -and (-not $Force)) {
+    Invoke-PostAgentGitPushGuarantee
     Write-Log "No un-audited draws pending; exiting cleanly (Power=#$($telemetry.lastAuditedPowerDrawId), Mega=#$($telemetry.lastAuditedMegaDrawId))."
     exit 0
   }
@@ -97,6 +138,7 @@ try {
 
   $prompt = @"
 In workspace c:/Users/Admin/Documents/antigravity/keen-borg, run the autonomous Gemini 4 Argon (High) Jackpot Day Retrospective & Missed-Day Catch-Up workflow:
+IMPORTANT: For every run_command tool call, always pass WaitMsBeforeAsync: 10000 and keep commands fast (<8s) so no command ever backgrounds.
 1. Run `node scripts/auto-evolve-vietlott.mjs` to inspect the latest live draws from raw.githubusercontent.com/vietvudanh/vietlott-data and www.minhngoc.net.vn, plus every missed/un-audited draw in `unAuditedPowerDraws` ($unAuditedPowerCount) and `unAuditedMegaDraws` ($unAuditedMegaCount).
 2. Sync all new or missed draws into `src/data/empiricalSeed2026.ts` (including normalized jackpot prize pools, resetting `currentJackpot1Vnd`/`currentJackpot2Vnd` to minimum seed whenever winners > 0, and updating `learnedWeights`, `hotPool`, `hotWeights`, `coldOverduePool`, `masterCorePool`, `recentDrawsTop2`), and update fallback dates in `src/app/page.tsx`, `src/components/ExecutiveHeader.tsx`, and `src/components/RollingForecastMatrix.tsx`.
 3. Execute a chronological Gemini 4 Argon (High) retrospective across every draw in `unAuditedPowerDraws` and `unAuditedMegaDraws`. Remember the user strictly purchases 5 standard 6-number tickets (`5 x 10,000 VND = 50,000 VND/day`, no Bao-7); on Power 6/55, Jackpot 1 wins on 6/6 main matches and Jackpot 2 wins on 5/6 main + 6th number matching the JP2 special bonus ball. Evaluate the causal pre-draw 5x6 forecast and 14-Ball Master Wheel Pool (`generateDayForecast`) against each settled outcome, diagnose misses / ±1 drifts / sieve bottlenecks, and refine `src/data/empiricalSeed2026.ts`, `src/lib/vietlottData.ts`, and `src/lib/quantEngine.ts` where walk-forward 3+/6..6/6 hit rates or wheeling coverage improve.
@@ -104,11 +146,18 @@ In workspace c:/Users/Admin/Documents/antigravity/keen-borg, run the autonomous 
 5. Run `npx.cmd tsc --noEmit` to confirm zero TypeScript errors, commit all updates with `git add` and `git commit`, and push to both `origin master` and `https://github.com/thienphucnt/clientcraft.git master:vietlott-quantmatrix-pro` (which triggers automatic GitHub Pages and Vercel rebuilds).
 "@
 
+  $prevAgyPref = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   & $AgyExe --model gemini-4-argon-high --effort high --mode accept-edits --dangerously-skip-permissions --print $prompt 2>&1 |
     ForEach-Object { Write-Log "[agy] $_" }
+  $agyExit = $LASTEXITCODE
+  $ErrorActionPreference = $prevAgyPref
 
-  if ($LASTEXITCODE -ne 0) {
-    throw "agy.exe exited with status code $LASTEXITCODE"
+  # Guarantee tsc verification, commit & push even if agy exited mid-cleanup or skipped git push
+  Invoke-PostAgentGitPushGuarantee
+
+  if ($agyExit -ne 0) {
+    throw "agy.exe exited with status code $agyExit"
   }
 
   Write-Log "Headless Gemini 4 Argon (High) retrospective completed successfully."

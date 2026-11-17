@@ -610,8 +610,20 @@ export function generateDayForecast(
       : []),
   ]);
 
-  // Identify Empty Decades in the immediately preceding draw (Retrospective Factor 8)
+  // Identify Empty Decades & Extreme Parity Skew in the immediately preceding draws (Retrospective Factors 8 & 9)
   const lastDrawNums = cfg.recentDrawsTop2[0] ?? [];
+  const prev2DrawNums = cfg.recentDrawsTop2[1] ?? [];
+  const odd0Count = lastDrawNums.filter((x) => x % 2 !== 0).length;
+  const odd1Count = prev2DrawNums.filter((x) => x % 2 !== 0).length;
+  const starveEvenWheel =
+    lastDrawNums.length === 6 &&
+    (odd0Count === 6 ||
+      (prev2DrawNums.length === 6 && odd0Count + odd1Count >= 10));
+  const starveOddWheel =
+    lastDrawNums.length === 6 &&
+    (odd0Count === 0 ||
+      (prev2DrawNums.length === 6 && odd0Count + odd1Count <= 2));
+
   const maxDecadeIdx = Math.floor((cfg.maxNum - 1) / 10);
   const emptyDecadesSet = new Set<number>();
   for (let dIdx = 0; dIdx <= maxDecadeIdx; dIdx++) {
@@ -675,6 +687,8 @@ export function generateDayForecast(
     let convictionSum = 0;
     let masterHits = 0;
     let lagRepeatHits = 0;
+    let neighborShiftHits = 0;
+    let parityReboundHits = 0;
     let frequencyBalanceBonus = 0;
     let emptyDecadeHits = 0;
     let sandwichBridgeHits = 0;
@@ -694,6 +708,10 @@ export function generateDayForecast(
         frequencyBalanceBonus -= 140 * (used - 1);
       }
       if (lagUnionSet.has(n)) lagRepeatHits++;
+      if (lagUnionSet.has(n - 1) || lagUnionSet.has(n + 1)) neighborShiftHits++;
+      if ((starveEvenWheel && n % 2 === 0) || (starveOddWheel && n % 2 !== 0)) {
+        parityReboundHits++;
+      }
       if (emptyDecadesSet.has(Math.floor((n - 1) / 10))) emptyDecadeHits++;
       if (
         (lagUnionSet.has(n - 1) && lagUnionSet.has(n + 1)) ||
@@ -703,19 +721,30 @@ export function generateDayForecast(
       }
     }
 
-    // Empirical Lag-1/Lag-2 Repeat Anchor Bonus (1 to 2 repeats from last 2 draws is optimal)
+    // Empirical Lag-1/Lag-2 Repeat Anchor Bonus (1 to 2 repeats from last 2 draws is optimal;
+    // when extreme parity drought is active, ±1 neighbor shifts that flip parity substitute for direct repeats)
     const lagBonus =
       lagRepeatHits === 1 || lagRepeatHits === 2
         ? 110
         : lagRepeatHits === 3
         ? 45
+        : (starveEvenWheel || starveOddWheel) && neighborShiftHits >= 2
+        ? 95
+        : 0;
+
+    // Parity Mean-Reversion & Neighbor Shift Bonus after 6:0 / 11:1 extreme parity draws
+    const parityWheelBonus =
+      starveEvenWheel || starveOddWheel
+        ? (parityReboundHits >= 4 ? 115 : parityReboundHits * 22) +
+          Math.min(4, neighborShiftHits) * 34
         : 0;
 
     // Retrospective Empty-Decade Mean-Reversion & Sandwich Midpoint Bonus
     const maxEmptyCap = Math.max(2, Math.min(4, emptyDecadesSet.size));
     const retrospectiveStructuralBonus =
       Math.min(maxEmptyCap, emptyDecadeHits) * 52 +
-      Math.min(3, sandwichBridgeHits) * 46;
+      Math.min(3, sandwichBridgeHits) * 46 +
+      parityWheelBonus;
 
     // 3. Marginal t=3 Triplet Coverage Gain
     let newTriplets = 0;

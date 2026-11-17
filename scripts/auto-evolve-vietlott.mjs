@@ -4,8 +4,12 @@
  * Used both by headless background Gemini 4 Argon (High) automation and diagnostics.
  */
 
+import { execFileSync } from "node:child_process";
+import dns from "node:dns";
 import fs from "node:fs";
 import path from "node:path";
+
+dns.setDefaultResultOrder("ipv4first");
 
 const WORKSPACE_ROOT = path.resolve(import.meta.dirname, "..");
 const SEED_FILE = path.join(WORKSPACE_ROOT, "src/data/empiricalSeed2026.ts");
@@ -25,14 +29,43 @@ const SOURCES = {
     "https://www.minhngoc.net.vn/ket-qua-xo-so/dien-toan-vietlott/mega-6x45.html",
 };
 
-async function fetchJsonlTail(url, count = 60) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "VietlottQuantMatrixPro-AutoEvolver/3.1" },
-  });
-  if (!res.ok) {
+async function fetchTextWithFallback(url) {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "VietlottQuantMatrixPro-AutoEvolver/3.3" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) {
+      return await res.text();
+    }
     throw new Error(`HTTP ${res.status} fetching ${url}`);
+  } catch (err) {
+    if (process.platform === "win32") {
+      return execFileSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-WindowStyle",
+          "Hidden",
+          "-Command",
+          "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; (Invoke-WebRequest -Uri $env:VIETLOTT_FETCH_URL -UseBasicParsing -TimeoutSec 15 -Headers @{ 'User-Agent' = 'VietlottQuantMatrixPro-AutoEvolver/3.3' }).Content",
+        ],
+        {
+          env: { ...process.env, VIETLOTT_FETCH_URL: url },
+          encoding: "utf8",
+          windowsHide: true,
+          maxBuffer: 15 * 1024 * 1024,
+          timeout: 20000,
+        }
+      );
+    }
+    throw err;
   }
-  const text = await res.text();
+}
+
+async function fetchJsonlTail(url, count = 60) {
+  const text = await fetchTextWithFallback(url);
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -60,11 +93,8 @@ function parseDigits(raw) {
 
 async function fetchMinhNgocJackpot(url, gameType) {
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "VietlottQuantMatrixPro-AutoEvolver/3.1" },
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
+    const html = await fetchTextWithFallback(url);
+    if (!html) return null;
 
     const idMatch =
       html.match(/id="DT6X[45]5_KY_VE"[^>]*>\s*#?(\d+)/i) ||
@@ -105,32 +135,57 @@ async function fetchMinhNgocJackpot(url, gameType) {
       }
     }
 
+    const minJp1 = gameType === "6/55" ? 30_000_000_000 : 12_000_000_000;
+
     if (gameType === "6/55") {
       const jp1Match = html.match(/id="DT6X[45]5_G_JACKPOT"[^>]*>\s*([0-9.,]+)/i);
       const jp2Match = html.match(/id="DT6X55_G_JACKPOT2"[^>]*>\s*([0-9.,]+)/i);
       const w1Match = html.match(/id="DT6X[45]5_S_JACKPOT"[^>]*>\s*(\d+)/i);
       const w2Match = html.match(/id="DT6X55_S_JACKPOT2"[^>]*>\s*(\d+)/i);
+      const jp1Winners =
+        w1Match?.[1] !== undefined ? Number(w1Match[1]) : undefined;
+      const jp2Winners =
+        w2Match?.[1] !== undefined ? Number(w2Match[1]) : undefined;
+      let jackpot1Vnd = parseDigits(jp1Match?.[1]);
+      let jackpot2Vnd = parseDigits(jp2Match?.[1]);
+      if (jp1Winners && jp1Winners > 1 && jackpot1Vnd && jackpot1Vnd < minJp1) {
+        jackpot1Vnd = jackpot1Vnd * jp1Winners;
+      }
+      if (
+        jp2Winners &&
+        jp2Winners > 1 &&
+        jackpot2Vnd &&
+        jackpot2Vnd < 3_000_000_000
+      ) {
+        jackpot2Vnd = jackpot2Vnd * jp2Winners;
+      }
       return {
         gameType,
         drawId: idMatch?.[1] ? String(idMatch[1]).padStart(5, "0") : undefined,
         date: dateIso,
         numbers: mainNums,
         bonus: bonusNum,
-        jackpot1Vnd: parseDigits(jp1Match?.[1]),
-        jackpot2Vnd: parseDigits(jp2Match?.[1]),
-        jp1Winners: w1Match?.[1] !== undefined ? Number(w1Match[1]) : undefined,
-        jp2Winners: w2Match?.[1] !== undefined ? Number(w2Match[1]) : undefined,
+        jackpot1Vnd,
+        jackpot2Vnd,
+        jp1Winners,
+        jp2Winners,
       };
     } else {
       const jp1Match = html.match(/id="DT6X[45]5_G_JACKPOT"[^>]*>\s*([0-9.,]+)/i);
       const w1Match = html.match(/id="DT6X[45]5_S_JACKPOT"[^>]*>\s*(\d+)/i);
+      const jp1Winners =
+        w1Match?.[1] !== undefined ? Number(w1Match[1]) : undefined;
+      let jackpot1Vnd = parseDigits(jp1Match?.[1]);
+      if (jp1Winners && jp1Winners > 1 && jackpot1Vnd && jackpot1Vnd < minJp1) {
+        jackpot1Vnd = jackpot1Vnd * jp1Winners;
+      }
       return {
         gameType,
         drawId: idMatch?.[1] ? String(idMatch[1]).padStart(5, "0") : undefined,
         date: dateIso,
         numbers: mainNums,
-        jackpot1Vnd: parseDigits(jp1Match?.[1]),
-        jp1Winners: w1Match?.[1] !== undefined ? Number(w1Match[1]) : undefined,
+        jackpot1Vnd,
+        jp1Winners,
       };
     }
   } catch {

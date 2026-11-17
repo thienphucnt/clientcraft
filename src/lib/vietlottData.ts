@@ -878,8 +878,27 @@ export function computeCausalSignalsForSlice(
     }
   }
 
+  // Precompute W3–W10 Multi-Anchor Historical Draw Echo (clusterEchoBonus)
+  const echoBallSet = new Set<number>();
+  for (const histDraw of historySlice.slice(2, 10)) {
+    const histAll =
+      histDraw.bonus !== undefined
+        ? [...histDraw.numbers, histDraw.bonus]
+        : histDraw.numbers;
+    let sharedCount = 0;
+    for (const x of histAll) {
+      if (recentPool3WithBonus.has(x)) sharedCount++;
+    }
+    if (sharedCount >= 3) {
+      for (const x of histAll) {
+        echoBallSet.add(x);
+      }
+    }
+  }
+
   const rawSignals = [];
   for (let b = 1; b <= maxNum; b++) {
+    const clusterEchoActive = echoBallSet.has(b);
     // 1. Short-Window W5 & W10 Exponential Surge (includes Power 6/55 Bonus Ball appearances for 6-number JP2 & main crossover)
     let expSurge = 0;
     const w10Len = Math.min(10, historySlice.length);
@@ -912,10 +931,14 @@ export function computeCausalSignalsForSlice(
         if (d.numbers.includes(b)) coHits++;
       }
     }
-    const companionLift =
+    const baseCompanionLift =
       anchorDraws > 0
         ? Math.min(1, (coHits / anchorDraws) / (6 / maxNum) / 2.2)
         : 0.4;
+    const companionLift = Math.min(
+      1,
+      baseCompanionLift + (clusterEchoActive ? 0.18 : 0)
+    );
 
     // 4. Multi-Horizon Momentum (W10, W20, W50, W100, W150)
     const countW = (w: number) =>
@@ -948,7 +971,10 @@ export function computeCausalSignalsForSlice(
       skipGap >= 2 && skipGap <= 6 && (hits.w20 >= 3 || (baseIdx >= 0 && baseIdx < 12))
         ? 0.28
         : 0;
-    const survivalRebound = Math.min(1, rScore / 1.35 + restedHotBonus);
+    const survivalRebound = Math.min(
+      1,
+      rScore / 1.35 + restedHotBonus + (clusterEchoActive ? 0.16 : 0)
+    );
 
     // 6. Neighbor ±1 Shift Magnet (captures adjacent step transitions e.g. 27->28->29, 40->41, Bonus±1)
     let neighborMagnet = 0;
@@ -1138,6 +1164,12 @@ export function buildDynamicGameConfigForDate(
     baseCfg
   );
 
+  // Detect extreme 6:0 single-parity or >=10/12 two-draw parity skew in newestDraw (d0) + secondDraw (d1)
+  const odd0 = newestDraw.numbers.filter((x) => x % 2 !== 0).length;
+  const odd1 = secondDraw.numbers.filter((x) => x % 2 !== 0).length;
+  const starveEvenNow = odd0 === 6 || odd0 + odd1 >= 10;
+  const starveOddNow = odd0 === 0 || odd0 + odd1 <= 2;
+
   const ballScores: Array<{
     ball: number;
     convictionWeight: number;
@@ -1146,15 +1178,32 @@ export function buildDynamicGameConfigForDate(
   const allBallConvictionMap: Record<number, number> = {};
 
   for (const sig of currentSignals) {
-    const compositeScore =
+    const isParityReboundBall =
+      (starveEvenNow && sig.ball % 2 === 0) ||
+      (starveOddNow && sig.ball % 2 !== 0);
+    // Parity-Catalyzed Rebound Synergy: after a 6:0 / 11:1 extreme parity draw, opposite-parity balls
+    // that also lie on ±1 neighbor shifts + empty decades, sandwich bridges, or W10 hot surges receive a targeted boost
+    const parityReboundSynergy =
+      isParityReboundBall &&
+      (sig.bridgeMidpoint >= 0.5 ||
+        sig.shortSurge >= 0.45 ||
+        (sig.decadeRebound >= 0.72 && sig.neighborMagnet >= 0.4) ||
+        (sig.survivalRebound >= 0.9 && sig.neighborMagnet >= 0.55))
+        ? 0.095
+        : 0;
+
+    const compositeScore = Math.min(
+      1,
       weights.shortSurge * sig.shortSurge +
-      weights.lagRepeat * sig.lagRepeat +
-      weights.companionLift * sig.companionLift +
-      weights.multiHorizon * sig.multiHorizon +
-      weights.survivalRebound * sig.survivalRebound +
-      weights.neighborMagnet * sig.neighborMagnet +
-      weights.bridgeMidpoint * sig.bridgeMidpoint +
-      weights.decadeRebound * sig.decadeRebound;
+        weights.lagRepeat * sig.lagRepeat +
+        weights.companionLift * sig.companionLift +
+        weights.multiHorizon * sig.multiHorizon +
+        weights.survivalRebound * sig.survivalRebound +
+        weights.neighborMagnet * sig.neighborMagnet +
+        weights.bridgeMidpoint * sig.bridgeMidpoint +
+        weights.decadeRebound * sig.decadeRebound +
+        parityReboundSynergy
+    );
 
     // Scale conviction weight into [25 .. 260] so weighted sampling strongly favors high-conviction numbers
     const convictionWeight = Math.max(
@@ -1171,7 +1220,10 @@ export function buildDynamicGameConfigForDate(
         rScore +
         (sig.skipGap >= 7 ? 0.35 : 0) +
         sig.survivalRebound * 0.4 +
-        sig.decadeRebound * 0.25,
+        sig.decadeRebound * 0.25 +
+        (isParityReboundBall && sig.skipGap >= 6
+          ? sig.neighborMagnet * 0.28 + sig.bridgeMidpoint * 0.32 + 0.14
+          : 0),
     });
   }
 
