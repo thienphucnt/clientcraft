@@ -617,11 +617,11 @@ export function generateDayForecast(
   const odd1Count = prev2DrawNums.filter((x) => x % 2 !== 0).length;
   const starveEvenWheel =
     lastDrawNums.length === 6 &&
-    (odd0Count === 6 ||
+    ((odd0Count === 6 && odd1Count >= 3) ||
       (prev2DrawNums.length === 6 && odd0Count + odd1Count >= 10));
   const starveOddWheel =
     lastDrawNums.length === 6 &&
-    (odd0Count === 0 ||
+    ((odd0Count === 0 && odd1Count <= 3) ||
       (prev2DrawNums.length === 6 && odd0Count + odd1Count <= 2));
 
   const maxDecadeIdx = Math.floor((cfg.maxNum - 1) / 10);
@@ -698,14 +698,18 @@ export function generateDayForecast(
       if (masterSet.has(n)) {
         masterHits++;
         // Across 5 tickets of 6 numbers (30 ball-slots), each of the 14 Master Pool balls
-        // should ideally appear 2 times (at most 3 times) for maximum t=3 wheeling coverage.
-        if (used === 0 || used === 1) {
-          frequencyBalanceBonus += 28;
+        // should ideally appear 2 times (14 * 2 = 28 slots) for complete t=3 wheeling coverage.
+        if (used === 0) {
+          frequencyBalanceBonus += 68;
+        } else if (used === 1) {
+          frequencyBalanceBonus += 32;
+        } else if (used === 2) {
+          frequencyBalanceBonus -= 85;
         } else if (used >= 3) {
-          frequencyBalanceBonus -= 180 * (used - 2);
+          frequencyBalanceBonus -= 220 * (used - 1);
         }
       } else if (used >= 2) {
-        frequencyBalanceBonus -= 140 * (used - 1);
+        frequencyBalanceBonus -= 150 * (used - 1);
       }
       if (lagUnionSet.has(n)) lagRepeatHits++;
       if (lagUnionSet.has(n - 1) || lagUnionSet.has(n + 1)) neighborShiftHits++;
@@ -1003,8 +1007,8 @@ export function generateDayForecast(
   }
 
   // =========================================================================
-  // STRATEGY 4 (GOLDEN_EQUILIBRIUM): 3O-3E / 4O-2E & 3L-3H Weighted by Self-Learned Conviction
-  // Evaluates up to 160 Golden Corridor candidates to maximize t=3 wheel coverage
+  // STRATEGY 4 (GOLDEN_EQUILIBRIUM): 2O-4E / 3O-3E / 4O-2E & 3L-3H Weighted by Self-Learned Conviction
+  // Evaluates up to 160 Golden Corridor candidates across all 4 Golden Triad parity partitions
   // =========================================================================
   const lowOdd = allNums.filter((x) => x <= cfg.midPoint && x % 2 !== 0);
   const lowEven = allNums.filter((x) => x <= cfg.midPoint && x % 2 === 0);
@@ -1021,20 +1025,35 @@ export function generateDayForecast(
   let validS4Count = 0;
 
   for (let attempt = 0; attempt < 3500 && validS4Count < 160; attempt++) {
-    const use4Odd = attempt % 3 === 1;
-    const cand = use4Odd
-      ? [
-          ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 2),
-          ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 1),
-          ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 2),
-          ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 1),
-        ].sort((a, b) => a - b)
-      : [
-          ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 2),
-          ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 1),
-          ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 1),
-          ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 2),
-        ].sort((a, b) => a - b);
+    const mode = attempt % 4;
+    const cand =
+      mode === 0
+        ? [
+            ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 1),
+            ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 2),
+            ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 2),
+            ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 1),
+          ].sort((a, b) => a - b)
+        : mode === 1
+        ? [
+            ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 2),
+            ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 1),
+            ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 2),
+            ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 1),
+          ].sort((a, b) => a - b)
+        : mode === 2
+        ? [
+            ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 1),
+            ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 2),
+            ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 1),
+            ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 2),
+          ].sort((a, b) => a - b)
+        : [
+            ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 2),
+            ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 1),
+            ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 1),
+            ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 2),
+          ].sort((a, b) => a - b);
 
     const sum = cand.reduce((acc, v) => acc + v, 0);
     const sig = cand.join(",");
@@ -1061,7 +1080,7 @@ export function generateDayForecast(
         "GOLDEN_EQUILIBRIUM",
         "Golden Equilibrium + Conviction Wheel",
         "GOLDEN EQUILIBRIUM",
-        `Conviction-weighted 3O-3E / 4O-2E parity, 3L-3H split, and Gaussian core sum [${cfg.goldenCorridor[0]}, ${cfg.goldenCorridor[1]}] with t=3 wheeling.`,
+        `Conviction-weighted 2O-4E / 3O-3E / 4O-2E Golden Triad parity, 3L-3H split, and Gaussian core sum [${cfg.goldenCorridor[0]}, ${cfg.goldenCorridor[1]}] with t=3 wheeling.`,
         slot4Nums
       )
     );

@@ -911,9 +911,14 @@ export function computeCausalSignalsForSlice(
     }
     const shortSurge = Math.min(1, expSurge / 2.2);
 
-    // 2. Lag-1, Lag-2 & Lag-3 Repeat Carryover Signal (plus Bonus->Main transition carryover on Power 6/55)
+    // 2. Lag-1, Lag-2 & Lag-3 Repeat Carryover Signal (plus Bonus->Main transition & Cross-Draw Neighbor Pivot carryover)
     let lagRepeat = 0;
-    if (set0.has(b)) lagRepeat += 0.55;
+    if (set0.has(b)) {
+      lagRepeat += 0.58;
+      if (set1.has(b - 1) || set1.has(b + 1) || b1 === b - 1 || b1 === b + 1) {
+        lagRepeat += 0.24;
+      }
+    }
     if (b0 === b) lagRepeat += 0.42;
     if (set1.has(b)) lagRepeat += 0.68;
     if (b1 === b) lagRepeat += 0.38;
@@ -976,17 +981,22 @@ export function computeCausalSignalsForSlice(
       rScore / 1.35 + restedHotBonus + (clusterEchoActive ? 0.16 : 0)
     );
 
-    // 6. Neighbor ±1 Shift Magnet (captures adjacent step transitions e.g. 27->28->29, 40->41, Bonus±1)
+    // 6. Neighbor ±1 Shift Magnet (captures adjacent step transitions & 3-draw directional ladders e.g. 25->26->27)
+    const isStepLadder =
+      (set0.has(b - 1) && (set1.has(b - 2) || set2.has(b - 2))) ||
+      (set0.has(b + 1) && (set1.has(b + 2) || set2.has(b + 2)));
     let neighborMagnet = 0;
     if (set0.has(b - 1) || set0.has(b + 1) || b0 === b - 1 || b0 === b + 1)
       neighborMagnet += 0.58;
     if (set1.has(b - 1) || set1.has(b + 1) || b1 === b - 1 || b1 === b + 1)
-      neighborMagnet += 0.42;
+      neighborMagnet += 0.44;
     if (set2.has(b - 1) || set2.has(b + 1)) neighborMagnet += 0.22;
+    if (isStepLadder) neighborMagnet += 0.28;
+    if (set0.has(b) && (set1.has(b - 1) || set1.has(b + 1)))
+      neighborMagnet += 0.2;
     neighborMagnet = Math.min(1, neighborMagnet);
 
-    // 7. Retrospective Factor: Sandwich Midpoint Bridge (b-1 & b+1 or b-2 & b+2 across last 2-3 draws)
-    // Discovered in Power 6/55 #01419 where 10=(09+11)/2, 31=(29+33)/2, and 54=(53+55)/2 all hit simultaneously!
+    // 7. Retrospective Factor: Sandwich Midpoint Bridge (b-1 & b+1 or b-2 & b+2 across last 2-3 draws + step-ladder)
     let bridgeMidpoint = 0;
     if (recentPool2WithBonus.has(b - 1) && recentPool2WithBonus.has(b + 1)) {
       bridgeMidpoint += 0.72;
@@ -997,10 +1007,12 @@ export function computeCausalSignalsForSlice(
     if (recentPool3WithBonus.has(b - 1) && recentPool3WithBonus.has(b + 1)) {
       bridgeMidpoint += 0.28;
     }
+    if (isStepLadder) {
+      bridgeMidpoint += 0.35;
+    }
     bridgeMidpoint = Math.min(1, bridgeMidpoint);
 
     // 8. Retrospective Factor: Empty-Decade Hypergeometric Mean-Reversion Surge
-    // Discovered in Mega 6/45 #01583 (4/6 winners from empty Decades 10-19 & 30-39) and Power 6/55 #01419 (3/6 winners from empty Decades 30-39 & 40-49)
     const dec = Math.floor((b - 1) / 10);
     const c0 = decadeCount0.get(dec) ?? 0;
     const c1 = decadeCount1.get(dec) ?? 0;
@@ -1008,11 +1020,18 @@ export function computeCausalSignalsForSlice(
     if (c0 === 0 && c1 === 0) {
       decadeRebound = emptyDecadesCount0 >= 3 ? 0.96 : 0.92;
     } else if (c0 === 0) {
-      decadeRebound = emptyDecadesCount0 >= 3 ? 0.84 : 0.75;
+      const singleEmptyBoost = emptyDecadesCount0 === 1 ? 0.1 : 0;
+      const splitNeighborBoost = set1.has(b - 1) || set1.has(b + 1) ? 0.08 : 0;
+      decadeRebound = Math.min(
+        0.96,
+        (emptyDecadesCount0 >= 3 ? 0.84 : 0.75) +
+          singleEmptyBoost +
+          splitNeighborBoost
+      );
     } else if (c0 === 1 && c1 === 0) {
       decadeRebound = 0.46;
     } else if (c0 >= 3) {
-      decadeRebound = 0.14;
+      decadeRebound = skipGap >= 10 && isStepLadder ? 0.48 : 0.14;
     }
 
     rawSignals.push({
@@ -1164,11 +1183,11 @@ export function buildDynamicGameConfigForDate(
     baseCfg
   );
 
-  // Detect extreme 6:0 single-parity or >=10/12 two-draw parity skew in newestDraw (d0) + secondDraw (d1)
+  // Detect genuine multi-draw parity drought (excluding 6:0 -> 0:6 whiplash where odd0 + odd1 == 6)
   const odd0 = newestDraw.numbers.filter((x) => x % 2 !== 0).length;
   const odd1 = secondDraw.numbers.filter((x) => x % 2 !== 0).length;
-  const starveEvenNow = odd0 === 6 || odd0 + odd1 >= 10;
-  const starveOddNow = odd0 === 0 || odd0 + odd1 <= 2;
+  const starveEvenNow = (odd0 === 6 && odd1 >= 3) || odd0 + odd1 >= 10;
+  const starveOddNow = (odd0 === 0 && odd1 <= 3) || odd0 + odd1 <= 2;
 
   const ballScores: Array<{
     ball: number;
@@ -1181,7 +1200,7 @@ export function buildDynamicGameConfigForDate(
     const isParityReboundBall =
       (starveEvenNow && sig.ball % 2 === 0) ||
       (starveOddNow && sig.ball % 2 !== 0);
-    // Parity-Catalyzed Rebound Synergy: after a 6:0 / 11:1 extreme parity draw, opposite-parity balls
+    // Parity-Catalyzed Rebound Synergy: after a genuine 6:0 / 11:1 parity drought, opposite-parity balls
     // that also lie on ±1 neighbor shifts + empty decades, sandwich bridges, or W10 hot surges receive a targeted boost
     const parityReboundSynergy =
       isParityReboundBall &&
@@ -1190,6 +1209,27 @@ export function buildDynamicGameConfigForDate(
         (sig.decadeRebound >= 0.72 && sig.neighborMagnet >= 0.4) ||
         (sig.survivalRebound >= 0.9 && sig.neighborMagnet >= 0.55))
         ? 0.095
+        : 0;
+
+    // Rested / Overdue Structural Convergence Synergy:
+    // Compensates for lagRepeat=0 & shortSurge=0 on rested balls (skipGap >= 3) that sit at the exact
+    // intersection of Sandwich Bridges (e.g. 32 between 31-33), Empty-Decade Neighbor Splits (e.g. 18 & 20 around 19),
+    // Overdue Lo-Gan Step Ladders (e.g. 27 continuing 25->26->27), or Cross-Draw Neighbor Lag-1 Pivots (e.g. 06).
+    const restedStructuralSynergy =
+      sig.skipGap >= 6 && sig.bridgeMidpoint >= 0.72 && sig.survivalRebound >= 0.85
+        ? 0.115
+        : sig.skipGap >= 3 &&
+          sig.decadeRebound >= 0.8 &&
+          sig.neighborMagnet >= 0.4 &&
+          sig.survivalRebound >= 0.85
+        ? 0.095
+        : sig.skipGap >= 10 &&
+          sig.survivalRebound >= 0.9 &&
+          sig.neighborMagnet >= 0.75 &&
+          sig.bridgeMidpoint >= 0.3
+        ? 0.105
+        : sig.skipGap === 0 && sig.lagRepeat >= 0.8 && sig.neighborMagnet >= 0.6
+        ? 0.065
         : 0;
 
     const compositeScore = Math.min(
@@ -1202,7 +1242,8 @@ export function buildDynamicGameConfigForDate(
         weights.neighborMagnet * sig.neighborMagnet +
         weights.bridgeMidpoint * sig.bridgeMidpoint +
         weights.decadeRebound * sig.decadeRebound +
-        parityReboundSynergy
+        parityReboundSynergy +
+        restedStructuralSynergy
     );
 
     // Scale conviction weight into [25 .. 260] so weighted sampling strongly favors high-conviction numbers
