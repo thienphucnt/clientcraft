@@ -1,11 +1,11 @@
 import {
-  BallTelemetryStat,
+  type BallTelemetryStat,
   CONSECUTIVE_PAIR_INCIDENCE,
   GAME_CONFIGS,
-  GameConfig,
-  GameType,
-  HistoricalDraw,
-  LearnedFactorWeights,
+  type GameConfig,
+  type GameType,
+  type HistoricalDraw,
+  type LearnedFactorWeights,
   MACRO_PARITY_DISTRIBUTION,
   MEGA_645_SEED_DRAWS,
   MEGA_645_TELEMETRY_LEADERS,
@@ -837,12 +837,16 @@ export function computeCausalSignalsForSlice(
   const d0 = historySlice[0]?.numbers ?? [];
   const d1 = historySlice[1]?.numbers ?? [];
   const d2 = historySlice[2]?.numbers ?? [];
+  const d3 = historySlice[3]?.numbers ?? [];
   const b0 = historySlice[0]?.bonus;
   const b1 = historySlice[1]?.bonus;
   const b2 = historySlice[2]?.bonus;
+  const b3 = historySlice[3]?.bonus;
   const set0 = new Set(d0);
   const set1 = new Set(d1);
   const set2 = new Set(d2);
+  const set3 = new Set(d3);
+  const mainPool2 = new Set([...d0, ...d1]);
   const recentUnion = new Set([...d0, ...d1]);
   const recentPool2WithBonus = new Set([
     ...d0,
@@ -879,6 +883,7 @@ export function computeCausalSignalsForSlice(
   }
 
   // Precompute W3–W10 Multi-Anchor Historical Draw Echo (clusterEchoBonus)
+  // plus W4–W30 Multi-Anchor Companion Echo (strictly outside d0..d2 to avoid self-matching d2)
   const echoBallSet = new Set<number>();
   for (const histDraw of historySlice.slice(2, 10)) {
     const histAll =
@@ -896,9 +901,87 @@ export function computeCausalSignalsForSlice(
     }
   }
 
+  const deepEchoStrengthMap = new Map<number, number>();
+  for (const histDraw of historySlice.slice(3, 30)) {
+    const histAll =
+      histDraw.bonus !== undefined
+        ? [...histDraw.numbers, histDraw.bonus]
+        : histDraw.numbers;
+    let shared2 = 0;
+    let shared3 = 0;
+    for (const x of histAll) {
+      if (recentPool2WithBonus.has(x)) shared2++;
+      if (recentPool3WithBonus.has(x)) shared3++;
+    }
+    if (shared2 >= 3 || shared3 >= 3) {
+      const w =
+        shared2 >= 4 ? 2.5 : shared3 >= 4 ? 2.0 : shared2 >= 3 ? 1.3 : 1.0;
+      for (const x of histAll) {
+        deepEchoStrengthMap.set(x, (deepEchoStrengthMap.get(x) ?? 0) + w);
+      }
+    }
+  }
+
+  const midPoint = baseCfg.midPoint;
+  const low0Count = d0.filter((x) => x <= midPoint).length;
+  const low1Count = d1.filter((x) => x <= midPoint).length;
+  const lowOdd0Count = d0.filter((x) => x <= midPoint && x % 2 !== 0).length;
+  const lowOdd1Count = d1.filter((x) => x <= midPoint && x % 2 !== 0).length;
+  const starveLowOddRegime =
+    d0.length === 6 &&
+    d1.length === 6 &&
+    low0Count <= 2 &&
+    low1Count <= 2 &&
+    lowOdd0Count === 0 &&
+    lowOdd0Count + lowOdd1Count <= 1;
+
   const rawSignals = [];
   for (let b = 1; b <= maxNum; b++) {
     const clusterEchoActive = echoBallSet.has(b);
+    const deepEchoStrength = deepEchoStrengthMap.get(b) ?? 0;
+    const dec = Math.floor((b - 1) / 10);
+    const c0 = decadeCount0.get(dec) ?? 0;
+    const c1 = decadeCount1.get(dec) ?? 0;
+    const countW = (w: number) =>
+      historySlice.slice(0, w).filter((d) => d.numbers.includes(b)).length;
+    const hits = {
+      w10: countW(10),
+      w20: countW(20),
+      w30: countW(30),
+      w50: countW(50),
+      w100: countW(100),
+      w150: countW(150),
+    };
+    const isDeepEchoCompanion =
+      starveLowOddRegime &&
+      !recentPool3WithBonus.has(b) &&
+      deepEchoStrength >= 2.0 &&
+      hits.w30 >= 4;
+    const isLag4Catalyzed =
+      starveLowOddRegime &&
+      set3.has(b) &&
+      ((c0 === 0 && (set0.has(b - 1) || set0.has(b + 1))) ||
+        isDeepEchoCompanion);
+    const isLag4StepCompletion =
+      starveLowOddRegime &&
+      !recentPool3WithBonus.has(b) &&
+      ((set3.has(b - 1) && set3.has(b - 2)) ||
+        (set3.has(b + 1) && set3.has(b + 2)));
+    const surrMain2Count = [b - 2, b - 1, b + 1, b + 2].filter((x) =>
+      mainPool2.has(x)
+    ).length;
+    const isReverseStepLadder =
+      starveLowOddRegime &&
+      ((set1.has(b - 1) && set0.has(b - 2)) ||
+        (set1.has(b + 1) && set0.has(b + 2)));
+    const isTriAnchorStepPocket =
+      starveLowOddRegime &&
+      surrMain2Count >= 3 &&
+      (set0.has(b - 1) ||
+        set0.has(b + 1) ||
+        set0.has(b - 2) ||
+        set0.has(b + 2));
+
     // 1. Short-Window W5 & W10 Exponential Surge (includes Power 6/55 Bonus Ball appearances for 6-number JP2 & main crossover)
     let expSurge = 0;
     const w10Len = Math.min(10, historySlice.length);
@@ -909,9 +992,12 @@ export function computeCausalSignalsForSlice(
         expSurge += 0.55 * Math.pow(0.82, j);
       }
     }
-    const shortSurge = Math.min(1, expSurge / 2.2);
+    const shortSurge = Math.min(
+      1,
+      expSurge / 2.2 + (isLag4Catalyzed ? 0.28 : 0)
+    );
 
-    // 2. Lag-1, Lag-2 & Lag-3 Repeat Carryover Signal (plus Bonus->Main transition & Cross-Draw Neighbor Pivot carryover)
+    // 2. Lag-1, Lag-2, Lag-3 & Catalyzed Lag-4 Repeat Carryover Signal
     let lagRepeat = 0;
     if (set0.has(b)) {
       lagRepeat += 0.58;
@@ -924,9 +1010,15 @@ export function computeCausalSignalsForSlice(
     if (b1 === b) lagRepeat += 0.38;
     if (set2.has(b)) lagRepeat += 0.32;
     if (b2 === b) lagRepeat += 0.25;
+    if (isLag4Catalyzed) {
+      lagRepeat += 0.58;
+    } else if (starveLowOddRegime && set3.has(b)) {
+      lagRepeat += 0.16;
+    }
+    if (starveLowOddRegime && b3 === b) lagRepeat += 0.12;
     lagRepeat = Math.min(1, lagRepeat);
 
-    // 3. Companion Co-Occurrence Lift with numbers from the last 2 draws
+    // 3. Companion Co-Occurrence Lift with numbers from the last 2 draws + W4-W30 Multi-Anchor Companion Echo
     let coHits = 0;
     let anchorDraws = 0;
     for (const d of window120) {
@@ -942,25 +1034,29 @@ export function computeCausalSignalsForSlice(
         : 0.4;
     const companionLift = Math.min(
       1,
-      baseCompanionLift + (clusterEchoActive ? 0.18 : 0)
+      baseCompanionLift +
+        (isDeepEchoCompanion
+          ? 0.32
+          : isTriAnchorStepPocket
+          ? 0.1
+          : clusterEchoActive || (starveLowOddRegime && deepEchoStrength >= 1.0)
+          ? 0.18
+          : 0)
     );
 
     // 4. Multi-Horizon Momentum (W10, W20, W50, W100, W150)
-    const countW = (w: number) =>
-      historySlice.slice(0, w).filter((d) => d.numbers.includes(b)).length;
-    const hits = {
-      w10: countW(10),
-      w20: countW(20),
-      w50: countW(50),
-      w100: countW(100),
-      w150: countW(150),
-    };
     const mZ = computeMomentumScore(hits, maxNum);
     const baseIdx = baseCfg.hotPool.indexOf(b);
     const baseBonus = baseIdx >= 0 ? (22 - baseIdx) / 44 : 0;
     const multiHorizon = Math.max(
       0,
-      Math.min(1, 0.45 + mZ * 0.18 + baseBonus * 0.25)
+      Math.min(
+        1,
+        0.45 +
+          mZ * 0.18 +
+          baseBonus * 0.25 +
+          (isDeepEchoCompanion || isLag4Catalyzed ? 0.22 : 0)
+      )
     );
 
     // 5. Survival Hazard Rebound (Damped Log-Normal + Rested Hot-Ball Rebound)
@@ -973,18 +1069,29 @@ export function computeCausalSignalsForSlice(
     }
     const rScore = computeSurvivalHazardScore(skipGap, maxNum);
     const restedHotBonus =
-      skipGap >= 2 && skipGap <= 6 && (hits.w20 >= 3 || (baseIdx >= 0 && baseIdx < 12))
+      skipGap >= 2 &&
+      skipGap <= 6 &&
+      (hits.w20 >= 3 ||
+        (starveLowOddRegime && (hits.w30 >= 3 || isTriAnchorStepPocket)) ||
+        (baseIdx >= 0 && baseIdx < 12))
         ? 0.28
         : 0;
     const survivalRebound = Math.min(
       1,
-      rScore / 1.35 + restedHotBonus + (clusterEchoActive ? 0.16 : 0)
+      rScore / 1.35 +
+        restedHotBonus +
+        (isDeepEchoCompanion
+          ? 0.24
+          : clusterEchoActive || isLag4Catalyzed
+          ? 0.16
+          : 0)
     );
 
-    // 6. Neighbor ±1 Shift Magnet (captures adjacent step transitions & 3-draw directional ladders e.g. 25->26->27)
+    // 6. Neighbor ±1 Shift Magnet (captures adjacent step transitions, 3-draw directional ladders & Tri-Anchor Step Pockets)
     const isStepLadder =
       (set0.has(b - 1) && (set1.has(b - 2) || set2.has(b - 2))) ||
-      (set0.has(b + 1) && (set1.has(b + 2) || set2.has(b + 2)));
+      (set0.has(b + 1) && (set1.has(b + 2) || set2.has(b + 2))) ||
+      isReverseStepLadder;
     let neighborMagnet = 0;
     if (set0.has(b - 1) || set0.has(b + 1) || b0 === b - 1 || b0 === b + 1)
       neighborMagnet += 0.58;
@@ -992,11 +1099,13 @@ export function computeCausalSignalsForSlice(
       neighborMagnet += 0.44;
     if (set2.has(b - 1) || set2.has(b + 1)) neighborMagnet += 0.22;
     if (isStepLadder) neighborMagnet += 0.28;
+    if (isTriAnchorStepPocket) neighborMagnet += 0.26;
+    if (isLag4StepCompletion) neighborMagnet += 0.42;
     if (set0.has(b) && (set1.has(b - 1) || set1.has(b + 1)))
       neighborMagnet += 0.2;
     neighborMagnet = Math.min(1, neighborMagnet);
 
-    // 7. Retrospective Factor: Sandwich Midpoint Bridge (b-1 & b+1 or b-2 & b+2 across last 2-3 draws + step-ladder)
+    // 7. Retrospective Factor: Sandwich Midpoint Bridge (b-1 & b+1 or b-2 & b+2 across last 2-3 draws + step-ladder & Tri-Anchor Pocket)
     let bridgeMidpoint = 0;
     if (recentPool2WithBonus.has(b - 1) && recentPool2WithBonus.has(b + 1)) {
       bridgeMidpoint += 0.72;
@@ -1010,18 +1119,26 @@ export function computeCausalSignalsForSlice(
     if (isStepLadder) {
       bridgeMidpoint += 0.35;
     }
+    if (isTriAnchorStepPocket) {
+      bridgeMidpoint += 0.25;
+    }
+    if (starveLowOddRegime && isDeepEchoCompanion) {
+      bridgeMidpoint += 0.45;
+    }
     bridgeMidpoint = Math.min(1, bridgeMidpoint);
 
     // 8. Retrospective Factor: Empty-Decade Hypergeometric Mean-Reversion Surge
-    const dec = Math.floor((b - 1) / 10);
-    const c0 = decadeCount0.get(dec) ?? 0;
-    const c1 = decadeCount1.get(dec) ?? 0;
     let decadeRebound = 0.3;
     if (c0 === 0 && c1 === 0) {
       decadeRebound = emptyDecadesCount0 >= 3 ? 0.96 : 0.92;
     } else if (c0 === 0) {
       const singleEmptyBoost = emptyDecadesCount0 === 1 ? 0.1 : 0;
-      const splitNeighborBoost = set1.has(b - 1) || set1.has(b + 1) ? 0.08 : 0;
+      const splitNeighborBoost =
+        set1.has(b - 1) ||
+        set1.has(b + 1) ||
+        (starveLowOddRegime && (set0.has(b - 1) || set0.has(b + 1)))
+          ? 0.08
+          : 0;
       decadeRebound = Math.min(
         0.96,
         (emptyDecadesCount0 >= 3 ? 0.84 : 0.75) +
@@ -1029,7 +1146,10 @@ export function computeCausalSignalsForSlice(
           splitNeighborBoost
       );
     } else if (c0 === 1 && c1 === 0) {
-      decadeRebound = 0.46;
+      decadeRebound =
+        starveLowOddRegime && b <= midPoint && (isDeepEchoCompanion || skipGap >= 10)
+          ? 0.84
+          : 0.46;
     } else if (c0 >= 3) {
       decadeRebound = skipGap >= 10 && isStepLadder ? 0.48 : 0.14;
     }
@@ -1216,7 +1336,15 @@ export function buildDynamicGameConfigForDate(
     // intersection of Sandwich Bridges (e.g. 32 between 31-33), Empty-Decade Neighbor Splits (e.g. 18 & 20 around 19),
     // Overdue Lo-Gan Step Ladders (e.g. 27 continuing 25->26->27), or Cross-Draw Neighbor Lag-1 Pivots (e.g. 06).
     const restedStructuralSynergy =
-      sig.skipGap >= 6 && sig.bridgeMidpoint >= 0.72 && sig.survivalRebound >= 0.85
+      sig.skipGap >= 10 &&
+      sig.survivalRebound >= 0.95 &&
+      sig.companionLift >= 0.9 &&
+      sig.decadeRebound >= 0.8 &&
+      sig.bridgeMidpoint >= 0.4
+        ? 0.135
+        : sig.skipGap >= 6 &&
+          sig.bridgeMidpoint >= 0.72 &&
+          sig.survivalRebound >= 0.85
         ? 0.115
         : sig.skipGap >= 3 &&
           sig.decadeRebound >= 0.8 &&

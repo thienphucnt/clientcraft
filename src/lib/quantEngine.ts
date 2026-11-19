@@ -1,9 +1,9 @@
 import {
   GAME_CONFIGS,
-  GameConfig,
-  GameType,
-  HistoricalDraw,
-  LearnedFactorWeights,
+  type GameConfig,
+  type GameType,
+  type HistoricalDraw,
+  type LearnedFactorWeights,
   MEGA_645_SEED_DRAWS,
   POWER_655_SEED_DRAWS,
 } from "@/data/empiricalSeed2026";
@@ -623,6 +623,21 @@ export function generateDayForecast(
     lastDrawNums.length === 6 &&
     ((odd0Count === 0 && odd1Count <= 3) ||
       (prev2DrawNums.length === 6 && odd0Count + odd1Count <= 2));
+  const low0Count = lastDrawNums.filter((x) => x <= cfg.midPoint).length;
+  const low1Count = prev2DrawNums.filter((x) => x <= cfg.midPoint).length;
+  const lowOdd0Count = lastDrawNums.filter(
+    (x) => x <= cfg.midPoint && x % 2 !== 0
+  ).length;
+  const lowOdd1Count = prev2DrawNums.filter(
+    (x) => x <= cfg.midPoint && x % 2 !== 0
+  ).length;
+  const starveLowOddWheel =
+    lastDrawNums.length === 6 &&
+    prev2DrawNums.length === 6 &&
+    low0Count <= 2 &&
+    low1Count <= 2 &&
+    lowOdd0Count === 0 &&
+    lowOdd0Count + lowOdd1Count <= 1;
 
   const maxDecadeIdx = Math.floor((cfg.maxNum - 1) / 10);
   const emptyDecadesSet = new Set<number>();
@@ -686,6 +701,8 @@ export function generateDayForecast(
     // 2. Conviction score sum + Master Core Pool concentration + Balanced 5x6 Frequency Cap + Retrospective Structural Bonuses
     let convictionSum = 0;
     let masterHits = 0;
+    let restedMasterHits = 0;
+    let lowOddHits = 0;
     let lagRepeatHits = 0;
     let neighborShiftHits = 0;
     let parityReboundHits = 0;
@@ -697,6 +714,7 @@ export function generateDayForecast(
       const used = ballUsageCount.get(n) ?? 0;
       if (masterSet.has(n)) {
         masterHits++;
+        if (!lagUnionSet.has(n)) restedMasterHits++;
         // Across 5 tickets of 6 numbers (30 ball-slots), each of the 14 Master Pool balls
         // should ideally appear 2 times (14 * 2 = 28 slots) for complete t=3 wheeling coverage.
         if (used === 0) {
@@ -711,6 +729,7 @@ export function generateDayForecast(
       } else if (used >= 2) {
         frequencyBalanceBonus -= 150 * (used - 1);
       }
+      if (n <= cfg.midPoint && n % 2 !== 0) lowOddHits++;
       if (lagUnionSet.has(n)) lagRepeatHits++;
       if (lagUnionSet.has(n - 1) || lagUnionSet.has(n + 1)) neighborShiftHits++;
       if ((starveEvenWheel && n % 2 === 0) || (starveOddWheel && n % 2 !== 0)) {
@@ -726,9 +745,11 @@ export function generateDayForecast(
     }
 
     // Empirical Lag-1/Lag-2 Repeat Anchor Bonus (1 to 2 repeats from last 2 draws is optimal;
-    // when extreme parity drought is active, ±1 neighbor shifts that flip parity substitute for direct repeats)
+    // when extreme parity drought or low-odd drought is active, ±1 neighbor shifts or rested Master Pool balls substitute)
     const lagBonus =
-      lagRepeatHits === 1 || lagRepeatHits === 2
+      starveLowOddWheel && restedMasterHits >= 4
+        ? 115 + restedMasterHits * 28
+        : lagRepeatHits === 1 || lagRepeatHits === 2
         ? 110
         : lagRepeatHits === 3
         ? 45
@@ -736,11 +757,13 @@ export function generateDayForecast(
         ? 95
         : 0;
 
-    // Parity Mean-Reversion & Neighbor Shift Bonus after 6:0 / 11:1 extreme parity draws
+    // Parity Mean-Reversion & Neighbor Shift Bonus after 6:0 / 11:1 extreme parity draws or Low-Odd starvation
     const parityWheelBonus =
       starveEvenWheel || starveOddWheel
         ? (parityReboundHits >= 4 ? 115 : parityReboundHits * 22) +
           Math.min(4, neighborShiftHits) * 34
+        : starveLowOddWheel
+        ? Math.min(4, lowOddHits) * 38 + restedMasterHits * 34
         : 0;
 
     // Retrospective Empty-Decade Mean-Reversion & Sandwich Midpoint Bonus
