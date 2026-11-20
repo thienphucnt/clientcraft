@@ -814,6 +814,17 @@ export function getICTTelemetryClock(now: Date = new Date()) {
   };
 }
 
+const CAUSAL_PRIOR_HOT_POOL: Record<GameType, number[]> = {
+  "6/55": [
+    36, 21, 22, 42, 20, 37, 51, 52, 6, 41, 35, 34, 38, 44, 39, 5, 45, 18, 7, 13,
+    28, 49,
+  ],
+  "6/45": [
+    7, 45, 21, 27, 31, 43, 41, 23, 20, 25, 1, 22, 28, 19, 40, 6, 5, 44, 17, 14,
+    33, 18,
+  ],
+};
+
 /**
  * Compute 8 normalized quantitative & retrospective signals in [0, 1] for all balls 1..maxNum
  * given a strictly causal historical slice `historySlice` (sorted newest-first).
@@ -858,6 +869,11 @@ export function computeCausalSignalsForSlice(
     ...recentPool2WithBonus,
     ...d2,
     ...(b2 !== undefined ? [b2] : []),
+  ]);
+  const recentPool4WithBonus = new Set([
+    ...recentPool3WithBonus,
+    ...d3,
+    ...(b3 !== undefined ? [b3] : []),
   ]);
   const window120 = historySlice.slice(0, 120);
 
@@ -935,13 +951,101 @@ export function computeCausalSignalsForSlice(
     lowOdd0Count === 0 &&
     lowOdd0Count + lowOdd1Count <= 1;
 
+  // Detect 4-Draw Parity Whiplash Aftershock Even-Wave Regime:
+  // When d2+d3 had an extreme Odd overload (odd2+odd3 >= 10, e.g. 5O-1E + 6O-0E = 11O-1E)
+  // and d1+d0 swung to an Even wave (odd0+odd1 <= 2, e.g. 0O-6E + 2O-4E), the 4-draw window still has >=12 Odd balls
+  // while ±1 neighbors of Even-heavy d0+d1 artificially inflate Odd candidates.
+  const odd0Count = d0.filter((x) => x % 2 !== 0).length;
+  const odd1Count = d1.filter((x) => x % 2 !== 0).length;
+  const odd2Count = d2.filter((x) => x % 2 !== 0).length;
+  const odd3Count = d3.filter((x) => x % 2 !== 0).length;
+  const evenAftershockRegime =
+    d0.length === 6 &&
+    d1.length === 6 &&
+    d2.length === 6 &&
+    d3.length === 6 &&
+    odd0Count + odd1Count <= 2 &&
+    odd2Count + odd3Count >= 10;
+
+  const p4EchoMap = new Map<number, number>();
+  const d0PairEchoMap = new Map<number, number>();
+  if (evenAftershockRegime) {
+    for (const histDraw of historySlice.slice(4, 30)) {
+      const histAll =
+        histDraw.bonus !== undefined
+          ? [...histDraw.numbers, histDraw.bonus]
+          : histDraw.numbers;
+      let sh0 = 0;
+      let sh2 = 0;
+      let sh3 = 0;
+      let sh4 = 0;
+      for (const x of histAll) {
+        if (set0.has(x) || b0 === x) sh0++;
+        if (recentPool2WithBonus.has(x)) sh2++;
+        if (recentPool3WithBonus.has(x)) sh3++;
+        if (recentPool4WithBonus.has(x)) sh4++;
+      }
+      if (sh4 >= 4 || sh2 >= 3 || sh3 >= 3) {
+        for (const x of histAll) {
+          p4EchoMap.set(x, (p4EchoMap.get(x) ?? 0) + 1);
+        }
+      }
+      if (sh0 >= 2) {
+        for (const x of histAll) {
+          d0PairEchoMap.set(x, (d0PairEchoMap.get(x) ?? 0) + 1);
+        }
+      }
+    }
+  }
+
   const rawSignals = [];
   for (let b = 1; b <= maxNum; b++) {
     const clusterEchoActive = echoBallSet.has(b);
     const deepEchoStrength = deepEchoStrengthMap.get(b) ?? 0;
+    const p4EchoCount = p4EchoMap.get(b) ?? 0;
+    const d0PairEchoCount = d0PairEchoMap.get(b) ?? 0;
     const dec = Math.floor((b - 1) / 10);
     const c0 = decadeCount0.get(dec) ?? 0;
     const c1 = decadeCount1.get(dec) ?? 0;
+    const decUnion2Size = evenAftershockRegime
+      ? new Set([
+          ...d0.filter((x) => Math.floor((x - 1) / 10) === dec),
+          ...d1.filter((x) => Math.floor((x - 1) / 10) === dec),
+        ]).size
+      : 0;
+    const isSingleAnchorDecadeEcho =
+      evenAftershockRegime &&
+      decUnion2Size === 1 &&
+      !recentPool4WithBonus.has(b) &&
+      b % 2 === 0 &&
+      p4EchoCount >= 2;
+    const isD0PairEchoRebound =
+      evenAftershockRegime &&
+      !recentPool4WithBonus.has(b) &&
+      b % 2 === 0 &&
+      d0PairEchoCount >= 2 &&
+      p4EchoCount >= 2;
+    const isGap3CrossSandwich =
+      evenAftershockRegime &&
+      !recentPool4WithBonus.has(b) &&
+      ((set0.has(b - 1) && set0.has(b + 2) && set2.has(b + 1)) ||
+        (set0.has(b + 1) && set0.has(b - 2) && set2.has(b - 1)));
+    const isSandwichBreakoutCarryover =
+      evenAftershockRegime &&
+      set0.has(b) &&
+      set2.has(b - 1) &&
+      set2.has(b + 1);
+    const isD0EvenSandwich =
+      evenAftershockRegime &&
+      b % 2 === 0 &&
+      set0.has(b - 1) &&
+      set0.has(b + 1);
+    const isEvenAftershockCatalyzed =
+      isSingleAnchorDecadeEcho ||
+      isD0PairEchoRebound ||
+      isGap3CrossSandwich ||
+      isSandwichBreakoutCarryover ||
+      isD0EvenSandwich;
     const countW = (w: number) =>
       historySlice.slice(0, w).filter((d) => d.numbers.includes(b)).length;
     const hits = {
@@ -994,7 +1098,9 @@ export function computeCausalSignalsForSlice(
     }
     const shortSurge = Math.min(
       1,
-      expSurge / 2.2 + (isLag4Catalyzed ? 0.28 : 0)
+      expSurge / 2.2 +
+        (isLag4Catalyzed ? 0.28 : 0) +
+        (isEvenAftershockCatalyzed ? 0.42 : 0)
     );
 
     // 2. Lag-1, Lag-2, Lag-3 & Catalyzed Lag-4 Repeat Carryover Signal
@@ -1008,12 +1114,17 @@ export function computeCausalSignalsForSlice(
     if (b0 === b) lagRepeat += 0.42;
     if (set1.has(b)) lagRepeat += 0.68;
     if (b1 === b) lagRepeat += 0.38;
-    if (set2.has(b)) lagRepeat += 0.32;
+    if (set2.has(b)) lagRepeat += evenAftershockRegime && b % 2 !== 0 ? 0.12 : 0.32;
     if (b2 === b) lagRepeat += 0.25;
     if (isLag4Catalyzed) {
       lagRepeat += 0.58;
     } else if (starveLowOddRegime && set3.has(b)) {
       lagRepeat += 0.16;
+    }
+    if (isSandwichBreakoutCarryover) {
+      lagRepeat += 0.42;
+    } else if (isEvenAftershockCatalyzed) {
+      lagRepeat += 0.34;
     }
     if (starveLowOddRegime && b3 === b) lagRepeat += 0.12;
     lagRepeat = Math.min(1, lagRepeat);
@@ -1035,7 +1146,9 @@ export function computeCausalSignalsForSlice(
     const companionLift = Math.min(
       1,
       baseCompanionLift +
-        (isDeepEchoCompanion
+        (isEvenAftershockCatalyzed
+          ? 0.46
+          : isDeepEchoCompanion
           ? 0.32
           : isTriAnchorStepPocket
           ? 0.1
@@ -1046,7 +1159,9 @@ export function computeCausalSignalsForSlice(
 
     // 4. Multi-Horizon Momentum (W10, W20, W50, W100, W150)
     const mZ = computeMomentumScore(hits, maxNum);
-    const baseIdx = baseCfg.hotPool.indexOf(b);
+    const priorHotPool =
+      CAUSAL_PRIOR_HOT_POOL[baseCfg.gameType] ?? baseCfg.hotPool;
+    const baseIdx = priorHotPool.indexOf(b);
     const baseBonus = baseIdx >= 0 ? (22 - baseIdx) / 44 : 0;
     const multiHorizon = Math.max(
       0,
@@ -1055,7 +1170,11 @@ export function computeCausalSignalsForSlice(
         0.45 +
           mZ * 0.18 +
           baseBonus * 0.25 +
-          (isDeepEchoCompanion || isLag4Catalyzed ? 0.22 : 0)
+          (isEvenAftershockCatalyzed
+            ? 0.36
+            : isDeepEchoCompanion || isLag4Catalyzed
+            ? 0.22
+            : 0)
       )
     );
 
@@ -1080,7 +1199,11 @@ export function computeCausalSignalsForSlice(
       1,
       rScore / 1.35 +
         restedHotBonus +
-        (isDeepEchoCompanion
+        (isSandwichBreakoutCarryover
+          ? 0.72
+          : isEvenAftershockCatalyzed
+          ? 0.28
+          : isDeepEchoCompanion
           ? 0.24
           : clusterEchoActive || isLag4Catalyzed
           ? 0.16
@@ -1101,6 +1224,7 @@ export function computeCausalSignalsForSlice(
     if (isStepLadder) neighborMagnet += 0.28;
     if (isTriAnchorStepPocket) neighborMagnet += 0.26;
     if (isLag4StepCompletion) neighborMagnet += 0.42;
+    if (isEvenAftershockCatalyzed) neighborMagnet += 0.48;
     if (set0.has(b) && (set1.has(b - 1) || set1.has(b + 1)))
       neighborMagnet += 0.2;
     neighborMagnet = Math.min(1, neighborMagnet);
@@ -1125,11 +1249,18 @@ export function computeCausalSignalsForSlice(
     if (starveLowOddRegime && isDeepEchoCompanion) {
       bridgeMidpoint += 0.45;
     }
+    if (isGap3CrossSandwich || isSandwichBreakoutCarryover || isEvenAftershockCatalyzed) {
+      bridgeMidpoint += 0.58;
+    }
     bridgeMidpoint = Math.min(1, bridgeMidpoint);
 
     // 8. Retrospective Factor: Empty-Decade Hypergeometric Mean-Reversion Surge
     let decadeRebound = 0.3;
-    if (c0 === 0 && c1 === 0) {
+    if (isSingleAnchorDecadeEcho || isD0PairEchoRebound) {
+      decadeRebound = 0.94;
+    } else if (isEvenAftershockCatalyzed) {
+      decadeRebound = 0.78;
+    } else if (c0 === 0 && c1 === 0) {
       decadeRebound = emptyDecadesCount0 >= 3 ? 0.96 : 0.92;
     } else if (c0 === 0) {
       const singleEmptyBoost = emptyDecadesCount0 === 1 ? 0.1 : 0;
@@ -1303,11 +1434,19 @@ export function buildDynamicGameConfigForDate(
     baseCfg
   );
 
-  // Detect genuine multi-draw parity drought (excluding 6:0 -> 0:6 whiplash where odd0 + odd1 == 6)
+  // Detect genuine multi-draw parity drought (excluding 6:0 -> 0:6 whiplash where odd0 + odd1 == 6
+  // and excluding 4-draw aftershock regimes where odd2 + odd3 >= 10 preceded odd0 + odd1 <= 2)
+  const thirdDraw = priorDraws[2] ?? secondDraw;
+  const fourthDraw = priorDraws[3] ?? thirdDraw;
   const odd0 = newestDraw.numbers.filter((x) => x % 2 !== 0).length;
   const odd1 = secondDraw.numbers.filter((x) => x % 2 !== 0).length;
+  const odd2 = thirdDraw.numbers.filter((x) => x % 2 !== 0).length;
+  const odd3 = fourthDraw.numbers.filter((x) => x % 2 !== 0).length;
   const starveEvenNow = (odd0 === 6 && odd1 >= 3) || odd0 + odd1 >= 10;
-  const starveOddNow = (odd0 === 0 && odd1 <= 3) || odd0 + odd1 <= 2;
+  const starveOddNow =
+    ((odd0 === 0 && odd1 <= 3) || odd0 + odd1 <= 2) && odd2 + odd3 < 10;
+  const evenAftershockNow =
+    priorDraws.length >= 4 && odd0 + odd1 <= 2 && odd2 + odd3 >= 10;
 
   const ballScores: Array<{
     ball: number;
@@ -1334,13 +1473,20 @@ export function buildDynamicGameConfigForDate(
     // Rested / Overdue Structural Convergence Synergy:
     // Compensates for lagRepeat=0 & shortSurge=0 on rested balls (skipGap >= 3) that sit at the exact
     // intersection of Sandwich Bridges (e.g. 32 between 31-33), Empty-Decade Neighbor Splits (e.g. 18 & 20 around 19),
-    // Overdue Lo-Gan Step Ladders (e.g. 27 continuing 25->26->27), or Cross-Draw Neighbor Lag-1 Pivots (e.g. 06).
+    // Overdue Lo-Gan Step Ladders (e.g. 27 continuing 25->26->27), Cross-Draw Neighbor Lag-1 Pivots (e.g. 06),
+    // or Even-Wave Aftershock Multi-Anchor Echo & Cross-Draw Pocket convergences (e.g. 02, 10, 12, 28, 30, 32).
     const restedStructuralSynergy =
-      sig.skipGap >= 10 &&
-      sig.survivalRebound >= 0.95 &&
-      sig.companionLift >= 0.9 &&
-      sig.decadeRebound >= 0.8 &&
-      sig.bridgeMidpoint >= 0.4
+      evenAftershockNow &&
+      sig.ball % 2 === 0 &&
+      sig.companionLift >= 0.8 &&
+      sig.bridgeMidpoint >= 0.55 &&
+      sig.decadeRebound >= 0.75
+        ? 0.165
+        : sig.skipGap >= 10 &&
+          sig.survivalRebound >= 0.95 &&
+          sig.companionLift >= 0.9 &&
+          sig.decadeRebound >= 0.8 &&
+          sig.bridgeMidpoint >= 0.4
         ? 0.135
         : sig.skipGap >= 6 &&
           sig.bridgeMidpoint >= 0.72 &&

@@ -1,10 +1,10 @@
 {
   "lastAuditedPowerDrawId": "01426",
   "lastAuditedPowerDrawDate": "2026-11-19",
-  "lastAuditedMegaDrawId": "01590",
-  "lastAuditedMegaDrawDate": "2026-11-18",
-  "lastAuditedAtIct": "2026-11-19 21:05:00",
-  "engineVersion": "v3.5-argon-high",
+  "lastAuditedMegaDrawId": "01591",
+  "lastAuditedMegaDrawDate": "2026-11-20",
+  "lastAuditedAtIct": "2026-11-20 19:21:30",
+  "engineVersion": "v3.6-argon-high",
   "recentAudits": [
     {
       "gameType": "6/55",
@@ -104,6 +104,19 @@
         "Added W4-W30 Multi-Anchor Deep Echo Companion (isDeepEchoCompanion), Catalyzed Lag-4 Carryover (isLag4Catalyzed & isLag4StepCompletion), and Tri-Anchor Step-Sandwich Pocket (isTriAnchorStepPocket & isReverseStepLadder) in computeCausalSignalsForSlice",
         "Added peak-hazard companion decade rebound branch (+0.135) in restedStructuralSynergy and rested-Master/Low-Odd substitution in scoreCandidateWheelFit",
         "Elevated #01426 Master Pool coverage from 0/6 to 5/6 (13, 21, 23, 38, 43), achieved 3/6 Third Prize on Slot 3 (13, 23, 38) plus 2/6 on Slots 1, 2, 5, and raised 24-draw walk-forward avgMasterPoolHitsPerDraw to 2.04 and prize/cluster draw rate to 79%"
+      ]
+    },
+    {
+      "gameType": "6/45",
+      "drawId": "01591",
+      "date": "2026-11-20",
+      "numbers": [2, 10, 12, 28, 30, 32],
+      "finding": "After 4-draw parity whiplash (#01587 5O-1E + #01588 6O-0E = 11O-1E followed by #01589 0O-6E + #01590 2O-4E = 2O-10E, 4-draw total 13O-11E), 2-draw odd0+odd1<=2 check falsely triggered starveOddNow/starveOddWheel while ±1 neighbors of Even-heavy #01589+#01590 packed 11 Odd balls into the 14-Ball Master Pool ahead of an Even-Wave Aftershock draw (0O-6E, Sum=114). All 6 winners converged on 5 structural mechanisms: 28 bisected 27-29 (#01590); 30 sat in the Gap-3 Cross-Draw Sandwich Pocket [29(#01590), 31(#01588), 32(#01590)] with dual 4-draw echoes (#01584, #01574); 32 carried over as a Lag-1 Sandwich-Breakout repeat (having bisected 31-33 from #01588 in #01590); 12 rebounded at exact peak Lo-Gan hazard (skip=15 = 2.0*mu_g) as the sole ball with dual #01590 pair-echoes ([18,27] in #01575 & [20,27] in #01544); 02 & 10 rebounded into single-anchor Low Decade 01-10 (where 06 was the sole ball across both #01589 & #01590) with multi-anchor W5-W30 echoes (#01579/#01573 and #01578/#01577).",
+      "evolvedChanges": [
+        "Filtered 4-draw Odd-surplus aftershock (odd2+odd3>=10) out of starveOddNow and starveOddWheel, and added evenAftershockRegime / evenAftershockNow / evenAftershockWheel detection",
+        "Added Single-Anchor Decade Multi-Echo (isSingleAnchorDecadeEcho), d0-Pair Multi-Echo Rebound (isD0PairEchoRebound), Gap-3 Cross-Draw Sandwich Pocket (isGap3CrossSandwich), and Sandwich-Breakout Lag-1 Carryover (isSandwichBreakoutCarryover) in computeCausalSignalsForSlice",
+        "Decoupled CAUSAL_PRIOR_HOT_POOL from mutable GAME_CONFIGS[gameType].hotPool snapshots to prevent lookahead drift on historical walk-forward evaluations",
+        "Elevated #01591 Master Pool coverage from 1/6 to 6/6 (32, 02, 30, 10, 28, 12), achieved TWO 4/6 Second Prizes on Slot 1 (10, 12, 28, 30) and Slot 5 (02, 28, 30, 32) plus 2/6 on Slots 2 & 4 (600,000 VND won), and raised 24-draw walk-forward avgMasterPoolHitsPerDraw to 2.21 and avgUnionHitsPerDraw to 2.96"
       ]
     }
   ]

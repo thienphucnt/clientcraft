@@ -613,8 +613,12 @@ export function generateDayForecast(
   // Identify Empty Decades & Extreme Parity Skew in the immediately preceding draws (Retrospective Factors 8 & 9)
   const lastDrawNums = cfg.recentDrawsTop2[0] ?? [];
   const prev2DrawNums = cfg.recentDrawsTop2[1] ?? [];
+  const prev3DrawNums = priorSourceDraws[2]?.numbers ?? [];
+  const prev4DrawNums = priorSourceDraws[3]?.numbers ?? [];
   const odd0Count = lastDrawNums.filter((x) => x % 2 !== 0).length;
   const odd1Count = prev2DrawNums.filter((x) => x % 2 !== 0).length;
+  const odd2Count = prev3DrawNums.filter((x) => x % 2 !== 0).length;
+  const odd3Count = prev4DrawNums.filter((x) => x % 2 !== 0).length;
   const starveEvenWheel =
     lastDrawNums.length === 6 &&
     ((odd0Count === 6 && odd1Count >= 3) ||
@@ -622,7 +626,15 @@ export function generateDayForecast(
   const starveOddWheel =
     lastDrawNums.length === 6 &&
     ((odd0Count === 0 && odd1Count <= 3) ||
-      (prev2DrawNums.length === 6 && odd0Count + odd1Count <= 2));
+      (prev2DrawNums.length === 6 && odd0Count + odd1Count <= 2)) &&
+    odd2Count + odd3Count < 10;
+  const evenAftershockWheel =
+    lastDrawNums.length === 6 &&
+    prev2DrawNums.length === 6 &&
+    prev3DrawNums.length === 6 &&
+    prev4DrawNums.length === 6 &&
+    odd0Count + odd1Count <= 2 &&
+    odd2Count + odd3Count >= 10;
   const low0Count = lastDrawNums.filter((x) => x <= cfg.midPoint).length;
   const low1Count = prev2DrawNums.filter((x) => x <= cfg.midPoint).length;
   const lowOdd0Count = lastDrawNums.filter(
@@ -702,6 +714,7 @@ export function generateDayForecast(
     let convictionSum = 0;
     let masterHits = 0;
     let restedMasterHits = 0;
+    let evenMasterHits = 0;
     let lowOddHits = 0;
     let lagRepeatHits = 0;
     let neighborShiftHits = 0;
@@ -715,6 +728,7 @@ export function generateDayForecast(
       if (masterSet.has(n)) {
         masterHits++;
         if (!lagUnionSet.has(n)) restedMasterHits++;
+        if (n % 2 === 0) evenMasterHits++;
         // Across 5 tickets of 6 numbers (30 ball-slots), each of the 14 Master Pool balls
         // should ideally appear 2 times (14 * 2 = 28 slots) for complete t=3 wheeling coverage.
         if (used === 0) {
@@ -747,7 +761,9 @@ export function generateDayForecast(
     // Empirical Lag-1/Lag-2 Repeat Anchor Bonus (1 to 2 repeats from last 2 draws is optimal;
     // when extreme parity drought or low-odd drought is active, ±1 neighbor shifts or rested Master Pool balls substitute)
     const lagBonus =
-      starveLowOddWheel && restedMasterHits >= 4
+      evenAftershockWheel && evenMasterHits >= 3
+        ? 110 + evenMasterHits * 35
+        : starveLowOddWheel && restedMasterHits >= 4
         ? 115 + restedMasterHits * 28
         : lagRepeatHits === 1 || lagRepeatHits === 2
         ? 110
@@ -762,6 +778,8 @@ export function generateDayForecast(
       starveEvenWheel || starveOddWheel
         ? (parityReboundHits >= 4 ? 115 : parityReboundHits * 22) +
           Math.min(4, neighborShiftHits) * 34
+        : evenAftershockWheel
+        ? evenMasterHits * 58 + restedMasterHits * 24
         : starveLowOddWheel
         ? Math.min(4, lowOddHits) * 38 + restedMasterHits * 34
         : 0;
