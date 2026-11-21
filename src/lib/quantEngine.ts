@@ -241,6 +241,7 @@ export function inspectCombinatorialSieve(
   gameType: GameType,
   options?: {
     allowWideSum?: boolean;
+    allowSnapbackSum?: boolean;
     allowHighSkew?: boolean;
     allowSkewParity?: boolean;
     allowTwoConsecPairs?: boolean;
@@ -271,7 +272,9 @@ export function inspectCombinatorialSieve(
   const zScore = Number((meanDiff / cfg.stdDevSum).toFixed(2));
 
   // Gate 1: Gaussian Sum Corridor
-  const [minSum, maxSum] = options?.allowWideSum
+  const [minSum, maxSum] = options?.allowSnapbackSum
+    ? [cfg.corridor80[0], Math.round(cfg.meanSum + 2.05 * cfg.stdDevSum)]
+    : options?.allowWideSum
     ? cfg.corridor80
     : cfg.corridor70;
   const gate1Passed = isValidInput && sum >= minSum && sum <= maxSum;
@@ -463,6 +466,7 @@ export function passesCombinatorialSieve(
   gameType: GameType,
   options?: {
     allowWideSum?: boolean;
+    allowSnapbackSum?: boolean;
     allowHighSkew?: boolean;
     allowSkewParity?: boolean;
     allowTwoConsecPairs?: boolean;
@@ -637,6 +641,7 @@ export function generateDayForecast(
     odd2Count + odd3Count >= 10;
   const low0Count = lastDrawNums.filter((x) => x <= cfg.midPoint).length;
   const low1Count = prev2DrawNums.filter((x) => x <= cfg.midPoint).length;
+  const low2Count = prev3DrawNums.filter((x) => x <= cfg.midPoint).length;
   const lowOdd0Count = lastDrawNums.filter(
     (x) => x <= cfg.midPoint && x % 2 !== 0
   ).length;
@@ -650,6 +655,15 @@ export function generateDayForecast(
     low1Count <= 2 &&
     lowOdd0Count === 0 &&
     lowOdd0Count + lowOdd1Count <= 1;
+  const highZoneSnapbackWheel =
+    lastDrawNums.length === 6 &&
+    prev2DrawNums.length === 6 &&
+    prev3DrawNums.length === 6 &&
+    low0Count >= 4 &&
+    odd0Count >= 5 &&
+    low1Count <= 2 &&
+    low2Count <= 2;
+  const top7SnapbackSet = new Set(masterCorePool.slice(0, 7));
 
   const maxDecadeIdx = Math.floor((cfg.maxNum - 1) / 10);
   const emptyDecadesSet = new Set<number>();
@@ -715,6 +729,7 @@ export function generateDayForecast(
     let masterHits = 0;
     let restedMasterHits = 0;
     let evenMasterHits = 0;
+    let snapbackTop7Hits = 0;
     let lowOddHits = 0;
     let lagRepeatHits = 0;
     let neighborShiftHits = 0;
@@ -729,6 +744,7 @@ export function generateDayForecast(
         masterHits++;
         if (!lagUnionSet.has(n)) restedMasterHits++;
         if (n % 2 === 0) evenMasterHits++;
+        if (top7SnapbackSet.has(n)) snapbackTop7Hits++;
         // Across 5 tickets of 6 numbers (30 ball-slots), each of the 14 Master Pool balls
         // should ideally appear 2 times (14 * 2 = 28 slots) for complete t=3 wheeling coverage.
         if (used === 0) {
@@ -761,7 +777,9 @@ export function generateDayForecast(
     // Empirical Lag-1/Lag-2 Repeat Anchor Bonus (1 to 2 repeats from last 2 draws is optimal;
     // when extreme parity drought or low-odd drought is active, ±1 neighbor shifts or rested Master Pool balls substitute)
     const lagBonus =
-      evenAftershockWheel && evenMasterHits >= 3
+      highZoneSnapbackWheel && snapbackTop7Hits >= 4
+        ? 125 + snapbackTop7Hits * 42
+        : evenAftershockWheel && evenMasterHits >= 3
         ? 110 + evenMasterHits * 35
         : starveLowOddWheel && restedMasterHits >= 4
         ? 115 + restedMasterHits * 28
@@ -778,6 +796,8 @@ export function generateDayForecast(
       starveEvenWheel || starveOddWheel
         ? (parityReboundHits >= 4 ? 115 : parityReboundHits * 22) +
           Math.min(4, neighborShiftHits) * 34
+        : highZoneSnapbackWheel
+        ? snapbackTop7Hits * 68 + restedMasterHits * 26
         : evenAftershockWheel
         ? evenMasterHits * 58 + restedMasterHits * 24
         : starveLowOddWheel
@@ -834,8 +854,11 @@ export function generateDayForecast(
     const sc = [...nums].sort((a, b) => a - b);
     const report = inspectCombinatorialSieve(sc, gameType, {
       ...sieveOpts,
-      allowWideSum: slot === 5,
-      allowHighSkew: slot === 5,
+      allowWideSum: slot === 5 || (highZoneSnapbackWheel && slot === 1),
+      allowSnapbackSum:
+        highZoneSnapbackWheel && (slot === 1 || slot === 2 || slot === 5),
+      allowHighSkew:
+        slot === 5 || (highZoneSnapbackWheel && (slot === 1 || slot === 2)),
       allowSkewParity: slot === 5,
       allowTwoConsecPairs: slot === 3 || slot === 5,
     });
@@ -876,15 +899,23 @@ export function generateDayForecast(
   const s1Weights = getWeightsForPool(s1Pool);
 
   let validS1Count = 0;
+  const s1SieveOpts = highZoneSnapbackWheel
+    ? {
+        ...sieveOpts,
+        allowWideSum: true,
+        allowSnapbackSum: true,
+        allowHighSkew: true,
+      }
+    : sieveOpts;
   for (let attempt = 0; attempt < 1800 && validS1Count < 180; attempt++) {
     const cand = rng.sampleWeightedWithoutReplacement(s1Pool, s1Weights, 6);
     const sig = cand.join(",");
     if (
       !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType, sieveOpts)
+      passesCombinatorialSieve(cand, gameType, s1SieveOpts)
     ) {
       validS1Count++;
-      const rep = inspectCombinatorialSieve(cand, gameType, sieveOpts);
+      const rep = inspectCombinatorialSieve(cand, gameType, s1SieveOpts);
       const score =
         scoreCandidateWheelFit(cand) + rep.affinityLiftScore * 160;
       if (score > bestSlot1Score) {
@@ -933,6 +964,13 @@ export function generateDayForecast(
   );
 
   let validS2Count = 0;
+  const s2SieveOpts = highZoneSnapbackWheel
+    ? {
+        ...sieveOpts,
+        allowSnapbackSum: true,
+        allowHighSkew: true,
+      }
+    : sieveOpts;
   for (let attempt = 0; attempt < 2400 && validS2Count < 160; attempt++) {
     const coldPicks = rng.sampleWeightedWithoutReplacement(
       topColdPool,
@@ -946,7 +984,7 @@ export function generateDayForecast(
     const sig = cand.join(",");
     if (
       !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType, sieveOpts)
+      passesCombinatorialSieve(cand, gameType, s2SieveOpts)
     ) {
       validS2Count++;
       const score = scoreCandidateWheelFit(cand);
@@ -1129,9 +1167,11 @@ export function generateDayForecast(
 
   // =========================================================================
   // STRATEGY 5 (ANTI_SPLIT_EV): High-Zone Anti-Split Weighted by Self-Learned Conviction
-  // Prioritizes hot/repeating upper-range numbers (>= 27 for 6/45; >= 32 for 6/55)
+  // Prioritizes hot/repeating upper-range numbers (>= 27 for 6/45; >= 32 for 6/55, or > midPoint on High-Zone Snapback)
   // =========================================================================
-  const upperAntiSplitPool = allNums.filter((x) => x >= cfg.antiSplitCutoff);
+  const upperAntiSplitPool = allNums.filter((x) =>
+    highZoneSnapbackWheel ? x > cfg.midPoint : x >= cfg.antiSplitCutoff
+  );
   const lowerAnchorPool = allNums.filter((x) => x <= cfg.midPoint);
   const wUpper = getWeightsForPool(upperAntiSplitPool);
   const wLower = getWeightsForPool(lowerAnchorPool);
@@ -1160,6 +1200,7 @@ export function generateDayForecast(
       passesCombinatorialSieve(cand, gameType, {
         ...sieveOpts,
         allowWideSum: true,
+        allowSnapbackSum: highZoneSnapbackWheel,
         allowHighSkew: true,
         allowSkewParity: true,
         allowTwoConsecPairs: true,

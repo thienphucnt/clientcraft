@@ -1,10 +1,10 @@
 {
-  "lastAuditedPowerDrawId": "01426",
-  "lastAuditedPowerDrawDate": "2026-11-19",
+  "lastAuditedPowerDrawId": "01427",
+  "lastAuditedPowerDrawDate": "2026-11-21",
   "lastAuditedMegaDrawId": "01591",
   "lastAuditedMegaDrawDate": "2026-11-20",
-  "lastAuditedAtIct": "2026-11-20 19:21:30",
-  "engineVersion": "v3.6-argon-high",
+  "lastAuditedAtIct": "2026-11-21 19:15:30",
+  "engineVersion": "v3.7-argon-high",
   "recentAudits": [
     {
       "gameType": "6/55",
@@ -117,6 +117,20 @@
         "Added Single-Anchor Decade Multi-Echo (isSingleAnchorDecadeEcho), d0-Pair Multi-Echo Rebound (isD0PairEchoRebound), Gap-3 Cross-Draw Sandwich Pocket (isGap3CrossSandwich), and Sandwich-Breakout Lag-1 Carryover (isSandwichBreakoutCarryover) in computeCausalSignalsForSlice",
         "Decoupled CAUSAL_PRIOR_HOT_POOL from mutable GAME_CONFIGS[gameType].hotPool snapshots to prevent lookahead drift on historical walk-forward evaluations",
         "Elevated #01591 Master Pool coverage from 1/6 to 6/6 (32, 02, 30, 10, 28, 12), achieved TWO 4/6 Second Prizes on Slot 1 (10, 12, 28, 30) and Slot 5 (02, 28, 30, 32) plus 2/6 on Slots 2 & 4 (600,000 VND won), and raised 24-draw walk-forward avgMasterPoolHitsPerDraw to 2.21 and avgUnionHitsPerDraw to 2.96"
+      ]
+    },
+    {
+      "gameType": "6/55",
+      "drawId": "01427",
+      "date": "2026-11-21",
+      "numbers": [7, 29, 44, 45, 50, 54],
+      "bonus": 39,
+      "finding": "After 2 High-Zone wave draws (#01424 1L-5H Sum=203 & #01425 2L-4H Sum=204) were interrupted by a 1-draw Low-Odd spike in #01426 (4L-2H, 5O-1E, Sum=141, with Decade 51-55 completely empty), #01427 snapped back to High-Zone dominance (1L-5H, 3O-3E, Sum=229, +1.65σ). Baseline captured only 1/6 (44) with ±1 near-misses on 06->07 and 51->50 across 4 tickets, while Gate 1 capped Slot 5 sums at 216 (+1.30σ) and Slot 5's upperAntiSplitPool (>=32) left a 28-31 dead zone excluding 29. All 7 winning balls (6 main + JP2 bonus 39) converged on 6 structural mechanisms: 07 completed the delayed 3-draw step-ladder 05(#01424)->06(#01425)->07 with triple d1-pair echoes (#01415, #01408, #01407); 44 and 50 filled the only 2 High-Zone 4-integer contiguous cluster gaps ([41,42,43,(44),45] and [49,(50),51,52]); 45 repeated from Lag-3 (#01424) as the sole ball with dual 4-anchor echoes (#01413 & #01411); 54 rebounded into sole empty Decade 51-55 with dual d0 echoes (#01419 & #01406); 29 shifted +1 from 28 (#01424) into d1-empty Decade 21-30 via #01417 bridging 38(#01426) and 45(#01424); and JP2 bonus 39 shifted +1 from 38(#01426) with triple d0 echoes (#01422, #01419, #01409).",
+      "evolvedChanges": [
+        "Added highZoneSnapbackRegime / highZoneSnapbackNow / highZoneSnapbackWheel detection when consecutive High-Zone draws (low1<=2, low2<=2) precede a 1-draw Low-Odd spike (low0>=4, odd0>=5)",
+        "Added Delayed 3-Draw Step-Ladder Echo (isDelayedStepLadderEcho), High-Zone Contiguous Cluster Gap-Fill Bridge (isHighContiguousClusterBridge), Lag-3 Dual 4-Anchor Echo (isLag3FourAnchorEcho), Sole-Empty-Decade d0-Echo Rebound (isEmptyDecadeD0EchoRebound), Lag-3 Neighbor d0-d2 Bridge Echo (isLag3NeighborD1EmptyBridgeEcho), and d0 High-Neighbor Triple Echo (isD0HighNeighborTripleEcho) in computeCausalSignalsForSlice",
+        "Added allowSnapbackSum (+2.05σ upper Gaussian sum bound) and closed the 28-31 High-Zone gap in upperAntiSplitPool during High-Zone Snapback draws",
+        "Elevated #01427 Master Pool coverage from 1/6 to 6/6 Main + JP2 Bonus (7/7: 39, 45, 07, 44, 50, 54, 29), achieved 5/6 Main + JP2 Bonus (JACKPOT 2: 3,312,886,800 VND) on Slot 1 (07, 39, 44, 45, 50, 54) plus 2/6+Bonus on Slots 2 & 5 and 2/6+Near(±1) on Slots 3 & 4, and raised 24-draw walk-forward avgMasterPoolHitsPerDraw to 2.42 and avgUnionHitsPerDraw to 3.17"
       ]
     }
   ]

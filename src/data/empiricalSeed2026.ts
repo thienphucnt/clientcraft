@@ -91,9 +91,9 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     gameType: "6/55",
     name: "Power 6/55",
     vietnameseName: "Vietlott Power 6/55",
-    latestDrawId: "01426",
-    latestDrawDate: "2026-11-19",
-    nextDrawId: "01427",
+    latestDrawId: "01427",
+    latestDrawDate: "2026-11-21",
+    nextDrawId: "01428",
     maxNum: 55,
     midPoint: 27,
     totalCombinations: 28989675,
@@ -101,9 +101,9 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     minJackpot1Vnd: 30_000_000_000,
     minJackpot2Vnd: 3_000_000_000,
     spilloverThresholdVnd: 300_000_000_000,
-    currentJackpot1Vnd: 42_887_095_500,
-    currentJackpot2Vnd: 3_000_000_000,
-    seedMultiplier: 1.43,
+    currentJackpot1Vnd: 45_703_076_700,
+    currentJackpot2Vnd: 3_312_886_800,
+    seedMultiplier: 1.52,
     meanSum: 168.0,
     stdDevSum: 37.04,
     minPossibleSum: 21,
@@ -119,26 +119,26 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     cutoffTimeICT: "17:30",
     broadcastWindowICT: "18:00–18:30",
     hotPool: [
-      36, 21, 22, 42, 20, 37, 51, 52, 6, 41, 35, 34, 38, 44, 39, 5, 45, 18, 7, 13, 28, 49,
+      44, 39, 22, 38, 20, 45, 51, 36, 14, 37, 52, 12, 6, 21, 13, 53, 5, 7, 34, 41, 8, 43,
     ],
     hotWeights: [
-      177, 161, 159, 155, 153, 149, 149, 139, 132, 125, 124, 121, 119, 115, 113, 111, 107, 103, 102, 99, 99, 99,
+      196, 178, 163, 155, 148, 146, 141, 140, 133, 129, 129, 127, 123, 123, 119, 111, 109, 109, 109, 109, 108, 105,
     ],
-    coldOverduePool: [40, 4, 48, 11, 16, 37, 30, 14, 24, 32, 7, 50],
-    masterCorePool: [36, 21, 22, 42, 20, 37, 51, 52, 6, 41, 35, 34, 38, 44],
+    coldOverduePool: [40, 37, 11, 16, 14, 4, 30, 24, 48, 32, 15, 27],
+    masterCorePool: [44, 39, 22, 38, 20, 45, 51, 36, 14, 37, 52, 12, 6, 21],
     learnedWeights: {
-      shortSurge: 0.1419,
-      lagRepeat: 0.142,
-      companionLift: 0.1206,
-      multiHorizon: 0.1505,
-      survivalRebound: 0.1026,
-      neighborMagnet: 0.1199,
-      bridgeMidpoint: 0.1106,
-      decadeRebound: 0.1117,
+      shortSurge: 0.1404,
+      lagRepeat: 0.1215,
+      companionLift: 0.1183,
+      multiHorizon: 0.1554,
+      survivalRebound: 0.0852,
+      neighborMagnet: 0.1225,
+      bridgeMidpoint: 0.1272,
+      decadeRebound: 0.1294,
     },
     recentDrawsTop2: [
+      [7, 29, 44, 45, 50, 54], // #01427 (2026-11-21)
       [3, 13, 21, 23, 38, 43], // #01426 (2026-11-19)
-      [6, 20, 36, 41, 49, 52], // #01425 (2026-11-17)
     ],
   },
   "6/45": {
@@ -194,9 +194,26 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
 };
 
 /**
- * Tier 2 Built-In Empirical Seed Database (Updated through Nov 20, 2026; automatically superseded by Tier 1 Live Sync)
+ * Tier 2 Built-In Empirical Seed Database (Updated through Nov 21, 2026; automatically superseded by Tier 1 Live Sync)
  */
 export const POWER_655_SEED_DRAWS: HistoricalDraw[] = [
+  {
+    id: "01427",
+    date: "2026-11-21",
+    weekday: "Saturday",
+    gameType: "6/55",
+    numbers: [7, 29, 44, 45, 50, 54],
+    bonus: 39,
+    sum: 229,
+    oddEven: "3O-3E",
+    lowHigh: "1L-5H",
+    consecPairs: 1,
+    consecDetail: "44-45",
+    jackpot1Vnd: 45_703_076_700,
+    jackpot2Vnd: 3_312_886_800,
+    jp1Winners: 0,
+    jp2Winners: 0,
+  },
   {
     id: "01426",
     date: "2026-11-19",
