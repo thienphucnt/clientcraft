@@ -648,6 +648,9 @@ export function generateDayForecast(
   const lowOdd1Count = prev2DrawNums.filter(
     (x) => x <= cfg.midPoint && x % 2 !== 0
   ).length;
+  const lowOdd2Count = prev3DrawNums.filter(
+    (x) => x <= cfg.midPoint && x % 2 !== 0
+  ).length;
   const starveLowOddWheel =
     lastDrawNums.length === 6 &&
     prev2DrawNums.length === 6 &&
@@ -655,6 +658,12 @@ export function generateDayForecast(
     low1Count <= 2 &&
     lowOdd0Count === 0 &&
     lowOdd0Count + lowOdd1Count <= 1;
+  const evenWaveLowOddReboundWheel =
+    lastDrawNums.length === 6 &&
+    prev2DrawNums.length === 6 &&
+    prev3DrawNums.length === 6 &&
+    odd0Count + odd1Count + odd2Count <= 3 &&
+    lowOdd0Count + lowOdd1Count + lowOdd2Count === 0;
   const highZoneSnapbackWheel =
     lastDrawNums.length === 6 &&
     prev2DrawNums.length === 6 &&
@@ -663,7 +672,9 @@ export function generateDayForecast(
     odd0Count >= 5 &&
     low1Count <= 2 &&
     low2Count <= 2;
-  const top7SnapbackSet = new Set(masterCorePool.slice(0, 7));
+  const top7SnapbackSet = new Set(
+    masterCorePool.slice(0, evenWaveLowOddReboundWheel ? 6 : 7)
+  );
 
   const maxDecadeIdx = Math.floor((cfg.maxNum - 1) / 10);
   const emptyDecadesSet = new Set<number>();
@@ -777,7 +788,8 @@ export function generateDayForecast(
     // Empirical Lag-1/Lag-2 Repeat Anchor Bonus (1 to 2 repeats from last 2 draws is optimal;
     // when extreme parity drought or low-odd drought is active, ±1 neighbor shifts or rested Master Pool balls substitute)
     const lagBonus =
-      highZoneSnapbackWheel && snapbackTop7Hits >= 4
+      (highZoneSnapbackWheel || evenWaveLowOddReboundWheel) &&
+      snapbackTop7Hits >= 4
         ? 125 + snapbackTop7Hits * 42
         : evenAftershockWheel && evenMasterHits >= 3
         ? 110 + evenMasterHits * 35
@@ -793,11 +805,11 @@ export function generateDayForecast(
 
     // Parity Mean-Reversion & Neighbor Shift Bonus after 6:0 / 11:1 extreme parity draws or Low-Odd starvation
     const parityWheelBonus =
-      starveEvenWheel || starveOddWheel
+      highZoneSnapbackWheel || evenWaveLowOddReboundWheel
+        ? snapbackTop7Hits * 68 + restedMasterHits * 26
+        : starveEvenWheel || starveOddWheel
         ? (parityReboundHits >= 4 ? 115 : parityReboundHits * 22) +
           Math.min(4, neighborShiftHits) * 34
-        : highZoneSnapbackWheel
-        ? snapbackTop7Hits * 68 + restedMasterHits * 26
         : evenAftershockWheel
         ? evenMasterHits * 58 + restedMasterHits * 24
         : starveLowOddWheel
