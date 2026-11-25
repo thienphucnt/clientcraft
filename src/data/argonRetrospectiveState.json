@@ -1,10 +1,10 @@
 {
-  "lastAuditedPowerDrawId": "01427",
-  "lastAuditedPowerDrawDate": "2026-11-21",
-  "lastAuditedMegaDrawId": "01592",
-  "lastAuditedMegaDrawDate": "2026-11-22",
-  "lastAuditedAtIct": "2026-11-22 19:14:00",
-  "engineVersion": "v3.8-argon-high",
+  "lastAuditedPowerDrawId": "01428",
+  "lastAuditedPowerDrawDate": "2026-11-24",
+  "lastAuditedMegaDrawId": "01593",
+  "lastAuditedMegaDrawDate": "2026-11-25",
+  "lastAuditedAtIct": "2026-11-25 21:50:00",
+  "engineVersion": "v3.9-argon-high",
   "recentAudits": [
     {
       "gameType": "6/55",
@@ -143,6 +143,33 @@
         "Added evenWaveLowOddReboundRegime / evenWaveLowOddReboundNow / evenWaveLowOddReboundWheel detection when 3 consecutive draws produce <=3 Odd balls and 0 Low-Odd balls (odd0+odd1+odd2<=3, lowOdd0+lowOdd1+lowOdd2===0)",
         "Added d0-Neighbor Low-Odd Surge/Hazard Rebound (isD0NeighborLowOddRebound), Cross-Draw Bridge Rested Even Surge (isCrossDrawBridgeEvenSurge), Lag-2 Same-Decade Anchor Echo Carryover (isLag2DecadeAnchorEchoCarryover), Lag-3 Sandwich Multi-Echo Bridge (isLag3SandwichMultiEchoBridge), and Upper-Tail d2-Neighbor Contiguous Triplet Echo (isUpperTailD2NeighborTripletEcho) in computeCausalSignalsForSlice",
         "Elevated #01592 Master Pool coverage from 1/6 to 6/6 (01, 18, 23, 39, 14, 13), achieved 6/6 JACKPOT 1 (19,658,014,000 VND) on Slot 1 (01, 13, 14, 18, 23, 39) plus 2/6 on Slots 2, 3, 4, and raised 24-draw walk-forward avgMasterPoolHitsPerDraw to 2.50 and avgUnionHitsPerDraw to 3.33"
+      ]
+    },
+    {
+      "gameType": "6/55",
+      "drawId": "01428",
+      "date": "2026-11-24",
+      "numbers": [36, 40, 43, 46, 50, 55],
+      "bonus": 15,
+      "finding": "Following #01427's High-Zone Snapback surge (1L-5H, Sum=229, +1.65σ, consecutive pair 44-45, leaving Decades 11-20 & 31-40 empty of main balls), #01428 continued upper-tail expansion into 0L-6H & 2O-4E (Sum=270, +2.75σ). Baseline captured only 1/6 main (36) + Bonus (15) while producing ±1 near-misses on 37->36, 39->40, 44->43, 45->46, and 51->50 across Slots 1, 2, and 5, and Gates 1, 3, and 5 blocked 0L-6H 3-decade upper-tail tickets. All 7 winning balls (6 main + JP2 bonus 15) converged on 6 causal mechanisms: 36 rebounded into empty Decade 31-40 from consecutive Lag-3/Lag-4 repeats (#01425 & #01424) with W10=3; 40 rebounded into empty Decade 31-40 as the +1 neighbor of #01427 Bonus 39 at #1 Lo-Gan overdue hazard (skip=17); 43 (Lag-2 repeat from #01426) and 46 (overdue skip=10) flanked #01427's consecutive pair 44-45 with d0 multi-anchor echoes (#01419 & #01417); 50 repeated from Lag-1 (#01427) as an isolated High-Zone anchor with W20=4 and triple d0 echoes (#01415, #01413, #01400); 55 shifted +1 from #01427's 54 at skip=9 via #01413 cross-draw echo; and JP2 Bonus 15 rebounded into empty Decade 11-20 as the -1 neighbor of #01426 Bonus 16 at deep skip=30.",
+      "evolvedChanges": [
+        "Added highZoneContinuationRegime / highZoneContinuationNow / highZoneContinuationWheel detection when a High-Zone Snapback draw (low0<=1, sum0>=220) follows a Low-Odd spike (low1>=4, odd1>=5) and prior High-Zone wave (low2<=2)",
+        "Added Empty-Decade Consecutive Lag-3/4 Surge (isEmptyDecadeConsecLag34Surge), Empty-Decade d0-Bonus Neighbor Rebound (isEmptyDecadeD0BonusNeighborRebound), d0 Consecutive-Pair Flanking Echo (isD0ConsecPairFlankingEcho), Isolated d0 High-Anchor Multi-Echo (isIsolatedD0HighAnchorMultiEcho), Upper-Tail d0-Neighbor Cross-Echo (isUpperTailD0NeighborCrossEcho), and Empty-Low-Decade d1-Bonus Overdue Neighbor (isEmptyLowDecadeD1BonusOverdueNeighbor) in computeCausalSignalsForSlice",
+        "Added allowUpperTailContinuation in inspectCombinatorialSieve (relaxing Gate 1 to +2.90σ, Gate 3 to 0L-6H, and Gate 5 to >=3 decades when lowCount<=1) during High-Zone Continuation draws",
+        "Elevated #01428 Master Pool coverage from 1/6 to 6/6 Main + JP2 Bonus (7/7: 36, 43, 50, 55, 40, 46, 15) and achieved 6/6 JACKPOT 1 (49,047,689,100 VND) on Slot 1 (36, 40, 43, 46, 50, 55) plus 2/6+Bonus on Slots 2, 4, 5"
+      ]
+    },
+    {
+      "gameType": "6/45",
+      "drawId": "01593",
+      "date": "2026-11-25",
+      "numbers": [1, 13, 16, 23, 24, 38],
+      "finding": "Immediately after #01592 broke a 3-draw Even-Wave & Total Low-Odd Drought (#01589-#01591: 2O-16E, 0 Low-Odd balls) with a 4O-2E / 4L-2H Low-Odd surge (01, 13, 14, 18, 23, 39), #01593 equilibrated to 3O-3E & 3L-3H (Sum=115). Baseline captured 3/6 in the Master Pool (01, 13, 23) but only 1/6 per ticket with ±1 near-misses on 12/14->13 and 02->01 because lagBonus penalized 3 Lag-1 repeats and missed the 3 Even equilibrium partners (16, 24, 38). All 6 winning balls converged on 4 causal mechanisms: all 3 Low/Mid Odd anchors from #01592 (01, 13, 23) carried over directly as Lag-1 repeats; 16 bisected #01592's intra-draw Gap-2 Decade 11-20 pair (14, 18) at peak Lo-Gan survival hazard (skip=18); 24 shifted +1 from #01592's 23 as a Lag-4 Sandwich-Anchor Return from #01589 (where 23 had bisected 22-24); and 38 shifted -1 from #01592's upper-tail Odd anchor 39 via #01585's d0-pair echo (01, 38, 39).",
+      "evolvedChanges": [
+        "Added lowOddCarryoverEquilibriumRegime / lowOddCarryoverEquilibriumNow / lowOddCarryoverEquilibriumWheel detection when a 4O-2E / 4L-2H Low-Odd rebound draw (odd0>=4, low0>=4, lowOdd0>=2) follows a 3-draw Even-Wave Low-Odd drought (odd1+odd2+odd3<=3, lowOdd1+lowOdd2+lowOdd3===0)",
+        "Added d0 Low/Mid-Odd Lag-1 Carryover (isD0LowMidOddLag1Carryover), Intra-d0 Gap-2 Even Sandwich Hazard (isIntraD0Gap2EvenSandwichHazard), Sandwich-Anchor Lag-4 Even Return (isSandwichAnchorLag4EvenReturn), and Upper-Tail d0 Even-Neighbor Pair Echo (isUpperTailD0EvenNeighborPairEcho) in computeCausalSignalsForSlice",
+        "Seeded Slot 1 attempt 0 with the top-6 Master Core subset during High-Zone Continuation and Low-Odd Carryover Equilibrium draws",
+        "Elevated #01593 Master Pool coverage from 3/6 to 6/6 (01, 13, 23, 38, 24, 16), achieved 6/6 JACKPOT 1 (22,004,635,500 VND) on Slot 1 (01, 13, 16, 23, 24, 38) plus 2/6 across Slots 2-5, and raised 24-draw walk-forward avgMasterPoolHitsPerDraw to 2.92 and avgUnionHitsPerDraw to 3.63"
       ]
     }
   ]

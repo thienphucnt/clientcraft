@@ -945,6 +945,7 @@ export function computeCausalSignalsForSlice(
   const lowOdd0Count = d0.filter((x) => x <= midPoint && x % 2 !== 0).length;
   const lowOdd1Count = d1.filter((x) => x <= midPoint && x % 2 !== 0).length;
   const lowOdd2Count = d2.filter((x) => x <= midPoint && x % 2 !== 0).length;
+  const lowOdd3Count = d3.filter((x) => x <= midPoint && x % 2 !== 0).length;
   const starveLowOddRegime =
     d0.length === 6 &&
     d1.length === 6 &&
@@ -979,6 +980,21 @@ export function computeCausalSignalsForSlice(
     odd0Count + odd1Count + odd2Count <= 3 &&
     lowOdd0Count + lowOdd1Count + lowOdd2Count === 0;
 
+  // Detect Post-Even-Wave Low-Odd Carryover & Sandwich Equilibrium Regime:
+  // When a 3-draw Even-Wave & Total Low-Odd Drought (odd1+odd2+odd3 <= 3, lowOdd1+lowOdd2+lowOdd3 === 0)
+  // just rebounded in d0 into a 4O-2E / 4L-2H Low-Odd surge (odd0 >= 4, low0 >= 4, lowOdd0 >= 2),
+  // the next draw locks the d0 Low/Mid Odd carryover anchors while equilibrating to 3O-3E / 3L-3H via Even sandwich & neighbor shifts.
+  const lowOddCarryoverEquilibriumRegime =
+    d0.length === 6 &&
+    d1.length === 6 &&
+    d2.length === 6 &&
+    d3.length === 6 &&
+    odd0Count >= 4 &&
+    low0Count >= 4 &&
+    lowOdd0Count >= 2 &&
+    odd1Count + odd2Count + odd3Count <= 3 &&
+    lowOdd1Count + lowOdd2Count + lowOdd3Count === 0;
+
   // Detect High-Zone Trend Snapback Regime:
   // When d1 and d2 were consecutive High-Zone wave draws (low1 <= 2 && low2 <= 2)
   // and d0 released a 1-draw Low-Odd spike (low0 >= 4 && odd0 >= 5), the next draw snaps back to High-Zone dominance.
@@ -990,6 +1006,60 @@ export function computeCausalSignalsForSlice(
     odd0Count >= 5 &&
     low1Count <= 2 &&
     low2Count <= 2;
+
+  // Detect High-Zone Surge Continuation & Upper-Tail Expansion Regime:
+  // When d0 executed a High-Zone Snapback surge (low0 <= 1, d0Sum >= 220) after d1's Low-Odd spike (low1 >= 4, odd1 >= 5)
+  // and d2's High-Zone wave (low2 <= 2), leaving 2+ decades empty in d0, the upper-tail momentum continues while rebounding empty Decade 31-40.
+  const d0Sum = d0.reduce((acc, v) => acc + v, 0);
+  const highZoneContinuationRegime =
+    d0.length === 6 &&
+    d1.length === 6 &&
+    d2.length === 6 &&
+    low0Count <= 1 &&
+    d0Sum >= 220 &&
+    low1Count >= 4 &&
+    odd1Count >= 5 &&
+    low2Count <= 2;
+
+  const d0MultiEchoContMap = new Map<number, number>();
+  const d0d1CrossEchoContMap = new Map<number, number>();
+  if (highZoneContinuationRegime) {
+    for (const histDraw of historySlice.slice(2, 25)) {
+      const histAll =
+        histDraw.bonus !== undefined
+          ? [...histDraw.numbers, histDraw.bonus]
+          : histDraw.numbers;
+      let sh0 = 0;
+      let sh1 = 0;
+      for (const x of histAll) {
+        if (set0.has(x) || x === b0) sh0++;
+        if (set1.has(x) || x === b1) sh1++;
+      }
+      for (const x of histAll) {
+        if (sh0 >= 2) {
+          d0MultiEchoContMap.set(x, (d0MultiEchoContMap.get(x) ?? 0) + 1);
+        }
+        if (sh0 >= 1 && sh1 >= 1) {
+          d0d1CrossEchoContMap.set(x, (d0d1CrossEchoContMap.get(x) ?? 0) + 1);
+        }
+      }
+    }
+  }
+
+  const d0PairEchoCarryMap = new Map<number, number>();
+  if (lowOddCarryoverEquilibriumRegime) {
+    for (const histDraw of historySlice.slice(2, 25)) {
+      let sh0 = 0;
+      for (const x of histDraw.numbers) {
+        if (set0.has(x)) sh0++;
+      }
+      if (sh0 >= 2) {
+        for (const x of histDraw.numbers) {
+          d0PairEchoCarryMap.set(x, (d0PairEchoCarryMap.get(x) ?? 0) + 1);
+        }
+      }
+    }
+  }
 
   const crossBridgeEchoMap = new Map<number, number>();
   const sameDecD0EchoMap = new Map<number, number>();
@@ -1245,6 +1315,88 @@ export function computeCausalSignalsForSlice(
       isLag2DecadeAnchorEchoCarryover ||
       isLag3SandwichMultiEchoBridge ||
       isUpperTailD2NeighborTripletEcho;
+    const isEmptyDecadeConsecLag34Surge =
+      highZoneContinuationRegime &&
+      c0 === 0 &&
+      set2.has(b) &&
+      set3.has(b) &&
+      hits.w10 >= 3;
+    const isEmptyDecadeD0BonusNeighborRebound =
+      highZoneContinuationRegime &&
+      c0 === 0 &&
+      b0 !== undefined &&
+      (b0 === b - 1 || b0 === b + 1) &&
+      skipGap >= 14;
+    const isD0ConsecPairFlankingEcho =
+      highZoneContinuationRegime &&
+      ((set0.has(b + 1) && set0.has(b + 2)) ||
+        (set0.has(b - 1) && set0.has(b - 2))) &&
+      (d0MultiEchoContMap.get(b) ?? 0) >= 1;
+    const isIsolatedD0HighAnchorMultiEcho =
+      highZoneContinuationRegime &&
+      b > midPoint &&
+      set0.has(b) &&
+      !set0.has(b - 1) &&
+      !set0.has(b + 1) &&
+      hits.w20 >= 4 &&
+      (d0MultiEchoContMap.get(b) ?? 0) >= 2;
+    const isUpperTailD0NeighborCrossEcho =
+      highZoneContinuationRegime &&
+      b > 50 &&
+      set0.has(b - 1) &&
+      !set0.has(b) &&
+      !recentPool4WithBonus.has(b) &&
+      (d0MultiEchoContMap.get(b) ?? 0) >= 1 &&
+      (d0d1CrossEchoContMap.get(b) ?? 0) >= 1;
+    const isEmptyLowDecadeD1BonusOverdueNeighbor =
+      highZoneContinuationRegime &&
+      c0 === 0 &&
+      b <= midPoint &&
+      b1 !== undefined &&
+      (b1 === b + 1 || b1 === b - 1) &&
+      skipGap >= 25;
+    const isHighContinuationCatalyzed =
+      isEmptyDecadeConsecLag34Surge ||
+      isEmptyDecadeD0BonusNeighborRebound ||
+      isD0ConsecPairFlankingEcho ||
+      isIsolatedD0HighAnchorMultiEcho ||
+      isUpperTailD0NeighborCrossEcho ||
+      isEmptyLowDecadeD1BonusOverdueNeighbor;
+    const isD0LowMidOddLag1Carryover =
+      lowOddCarryoverEquilibriumRegime &&
+      set0.has(b) &&
+      b % 2 !== 0 &&
+      b <= 25;
+    const isIntraD0Gap2EvenSandwichHazard =
+      lowOddCarryoverEquilibriumRegime &&
+      b % 2 === 0 &&
+      set0.has(b - 2) &&
+      set0.has(b + 2) &&
+      skipGap >= 12;
+    const isSandwichAnchorLag4EvenReturn =
+      lowOddCarryoverEquilibriumRegime &&
+      b % 2 === 0 &&
+      set0.has(b - 1) &&
+      set3.has(b) &&
+      set3.has(b - 2);
+    const isUpperTailD0EvenNeighborPairEcho =
+      lowOddCarryoverEquilibriumRegime &&
+      b > 32 &&
+      b % 2 === 0 &&
+      set0.has(b + 1) &&
+      !set0.has(b) &&
+      (d0PairEchoCarryMap.get(b) ?? 0) >= 1;
+    const isLowOddCarryoverEquilibriumCatalyzed =
+      isD0LowMidOddLag1Carryover ||
+      isIntraD0Gap2EvenSandwichHazard ||
+      isSandwichAnchorLag4EvenReturn ||
+      isUpperTailD0EvenNeighborPairEcho;
+    const isRegimeCatalyzed =
+      isEvenAftershockCatalyzed ||
+      isHighSnapbackCatalyzed ||
+      isEvenWaveLowOddReboundCatalyzed ||
+      isHighContinuationCatalyzed ||
+      isLowOddCarryoverEquilibriumCatalyzed;
     const isDeepEchoCompanion =
       starveLowOddRegime &&
       !recentPool3WithBonus.has(b) &&
@@ -1289,11 +1441,7 @@ export function computeCausalSignalsForSlice(
       1,
       expSurge / 2.2 +
         (isLag4Catalyzed ? 0.28 : 0) +
-        (isEvenAftershockCatalyzed ||
-        isHighSnapbackCatalyzed ||
-        isEvenWaveLowOddReboundCatalyzed
-          ? 0.42
-          : 0)
+        (isRegimeCatalyzed ? 0.48 : 0)
     );
 
     // 2. Lag-1, Lag-2, Lag-3 & Catalyzed Lag-4 Repeat Carryover Signal
@@ -1317,15 +1465,15 @@ export function computeCausalSignalsForSlice(
     if (
       isSandwichBreakoutCarryover ||
       isLag3FourAnchorEcho ||
-      isLag2DecadeAnchorEchoCarryover
+      isLag2DecadeAnchorEchoCarryover ||
+      isEmptyDecadeConsecLag34Surge ||
+      isIsolatedD0HighAnchorMultiEcho ||
+      isD0LowMidOddLag1Carryover ||
+      isSandwichAnchorLag4EvenReturn
     ) {
-      lagRepeat += 0.42;
-    } else if (
-      isEvenAftershockCatalyzed ||
-      isHighSnapbackCatalyzed ||
-      isEvenWaveLowOddReboundCatalyzed
-    ) {
-      lagRepeat += 0.36;
+      lagRepeat += 0.46;
+    } else if (isRegimeCatalyzed) {
+      lagRepeat += 0.38;
     }
     if (starveLowOddRegime && b3 === b) lagRepeat += 0.12;
     lagRepeat = Math.min(1, lagRepeat);
@@ -1347,8 +1495,11 @@ export function computeCausalSignalsForSlice(
     const companionLift = Math.min(
       1,
       baseCompanionLift +
-        (isHighSnapbackCatalyzed || isEvenWaveLowOddReboundCatalyzed
-          ? 0.68
+        (isHighSnapbackCatalyzed ||
+        isEvenWaveLowOddReboundCatalyzed ||
+        isHighContinuationCatalyzed ||
+        isLowOddCarryoverEquilibriumCatalyzed
+          ? 0.72
           : isEvenAftershockCatalyzed
           ? 0.46
           : isDeepEchoCompanion
@@ -1373,10 +1524,8 @@ export function computeCausalSignalsForSlice(
         0.45 +
           mZ * 0.18 +
           baseBonus * 0.25 +
-          (isEvenAftershockCatalyzed ||
-          isHighSnapbackCatalyzed ||
-          isEvenWaveLowOddReboundCatalyzed
-            ? 0.36
+          (isRegimeCatalyzed
+            ? 0.42
             : isDeepEchoCompanion || isLag4Catalyzed
             ? 0.22
             : 0)
@@ -1397,12 +1546,14 @@ export function computeCausalSignalsForSlice(
       1,
       rScore / 1.35 +
         restedHotBonus +
-        (isSandwichBreakoutCarryover || isLag2DecadeAnchorEchoCarryover
-          ? 0.72
-          : isEvenAftershockCatalyzed ||
-            isHighSnapbackCatalyzed ||
-            isEvenWaveLowOddReboundCatalyzed
-          ? 0.28
+        (isSandwichBreakoutCarryover ||
+        isLag2DecadeAnchorEchoCarryover ||
+        isIsolatedD0HighAnchorMultiEcho ||
+        isD0ConsecPairFlankingEcho ||
+        isD0LowMidOddLag1Carryover
+          ? 0.76
+          : isRegimeCatalyzed
+          ? 0.32
           : isDeepEchoCompanion
           ? 0.24
           : clusterEchoActive || isLag4Catalyzed
@@ -1425,12 +1576,7 @@ export function computeCausalSignalsForSlice(
     if (isStepLadder) neighborMagnet += 0.28;
     if (isTriAnchorStepPocket) neighborMagnet += 0.26;
     if (isLag4StepCompletion) neighborMagnet += 0.42;
-    if (
-      isEvenAftershockCatalyzed ||
-      isHighSnapbackCatalyzed ||
-      isEvenWaveLowOddReboundCatalyzed
-    )
-      neighborMagnet += 0.52;
+    if (isRegimeCatalyzed) neighborMagnet += 0.56;
     if (set0.has(b) && (set1.has(b - 1) || set1.has(b + 1)))
       neighborMagnet += 0.2;
     neighborMagnet = Math.min(1, neighborMagnet);
@@ -1455,14 +1601,8 @@ export function computeCausalSignalsForSlice(
     if (starveLowOddRegime && isDeepEchoCompanion) {
       bridgeMidpoint += 0.45;
     }
-    if (
-      isGap3CrossSandwich ||
-      isSandwichBreakoutCarryover ||
-      isEvenAftershockCatalyzed ||
-      isHighSnapbackCatalyzed ||
-      isEvenWaveLowOddReboundCatalyzed
-    ) {
-      bridgeMidpoint += 0.62;
+    if (isGap3CrossSandwich || isSandwichBreakoutCarryover || isRegimeCatalyzed) {
+      bridgeMidpoint += 0.68;
     }
     bridgeMidpoint = Math.min(1, bridgeMidpoint);
 
@@ -1474,15 +1614,19 @@ export function computeCausalSignalsForSlice(
       isEmptyDecadeD0EchoRebound ||
       isLag3NeighborD1EmptyBridgeEcho ||
       isD0NeighborLowOddRebound ||
-      isUpperTailD2NeighborTripletEcho
+      isUpperTailD2NeighborTripletEcho ||
+      isEmptyDecadeConsecLag34Surge ||
+      isEmptyDecadeD0BonusNeighborRebound ||
+      isD0ConsecPairFlankingEcho ||
+      isIsolatedD0HighAnchorMultiEcho ||
+      isUpperTailD0NeighborCrossEcho ||
+      isIntraD0Gap2EvenSandwichHazard ||
+      isSandwichAnchorLag4EvenReturn ||
+      isUpperTailD0EvenNeighborPairEcho
     ) {
       decadeRebound = 0.94;
-    } else if (
-      isEvenAftershockCatalyzed ||
-      isHighSnapbackCatalyzed ||
-      isEvenWaveLowOddReboundCatalyzed
-    ) {
-      decadeRebound = 0.82;
+    } else if (isRegimeCatalyzed) {
+      decadeRebound = 0.84;
     } else if (c0 === 0 && c1 === 0) {
       decadeRebound = emptyDecadesCount0 >= 3 ? 0.96 : 0.92;
     } else if (c0 === 0) {
@@ -1682,16 +1826,39 @@ export function buildDynamicGameConfigForDate(
   const lowOdd2 = thirdDraw.numbers.filter(
     (x) => x <= baseCfg.midPoint && x % 2 !== 0
   ).length;
+  const lowOdd3 = fourthDraw.numbers.filter(
+    (x) => x <= baseCfg.midPoint && x % 2 !== 0
+  ).length;
   const evenWaveLowOddReboundNow =
     priorDraws.length >= 3 &&
     odd0 + odd1 + odd2 <= 3 &&
     lowOdd0 + lowOdd1 + lowOdd2 === 0;
+  const lowOddCarryoverEquilibriumNow =
+    priorDraws.length >= 4 &&
+    odd0 >= 4 &&
+    low0 >= 4 &&
+    lowOdd0 >= 2 &&
+    odd1 + odd2 + odd3 <= 3 &&
+    lowOdd1 + lowOdd2 + lowOdd3 === 0;
   const highZoneSnapbackNow =
     priorDraws.length >= 3 &&
     low0 >= 4 &&
     odd0 >= 5 &&
     low1 <= 2 &&
     low2 <= 2;
+  const newestSum = newestDraw.numbers.reduce((acc, v) => acc + v, 0);
+  const highZoneContinuationNow =
+    priorDraws.length >= 3 &&
+    low0 <= 1 &&
+    newestSum >= 220 &&
+    low1 >= 4 &&
+    odd1 >= 5 &&
+    low2 <= 2;
+  const specialCatalyzedRegimeNow =
+    highZoneSnapbackNow ||
+    evenWaveLowOddReboundNow ||
+    highZoneContinuationNow ||
+    lowOddCarryoverEquilibriumNow;
 
   const ballScores: Array<{
     ball: number;
@@ -1723,7 +1890,7 @@ export function buildDynamicGameConfigForDate(
     // High-Zone Trend Snapback Contiguous Cluster Bridges & Multi-Echo Rebounds (e.g. 07, 29, 44, 45, 50, 54 + 39),
     // or 3-Draw Even-Wave & Total Low-Odd Drought Rebounds (e.g. 01, 13, 14, 18, 23, 39).
     const restedStructuralSynergy =
-      (highZoneSnapbackNow || evenWaveLowOddReboundNow) &&
+      specialCatalyzedRegimeNow &&
       sig.companionLift >= 0.65 &&
       sig.bridgeMidpoint >= 0.6 &&
       sig.decadeRebound >= 0.8
@@ -1788,7 +1955,7 @@ export function buildDynamicGameConfigForDate(
         (sig.skipGap >= 7 ? 0.35 : 0) +
         sig.survivalRebound * 0.4 +
         sig.decadeRebound * 0.25 +
-        ((highZoneSnapbackNow || evenWaveLowOddReboundNow) &&
+        (specialCatalyzedRegimeNow &&
         sig.companionLift >= 0.65 &&
         sig.bridgeMidpoint >= 0.6 &&
         sig.decadeRebound >= 0.8
