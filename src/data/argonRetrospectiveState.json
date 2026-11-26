@@ -1,10 +1,10 @@
 {
-  "lastAuditedPowerDrawId": "01428",
-  "lastAuditedPowerDrawDate": "2026-11-24",
+  "lastAuditedPowerDrawId": "01429",
+  "lastAuditedPowerDrawDate": "2026-11-26",
   "lastAuditedMegaDrawId": "01593",
   "lastAuditedMegaDrawDate": "2026-11-25",
-  "lastAuditedAtIct": "2026-11-25 21:50:00",
-  "engineVersion": "v3.9-argon-high",
+  "lastAuditedAtIct": "2026-11-26 19:15:00",
+  "engineVersion": "v4.0-argon-high",
   "recentAudits": [
     {
       "gameType": "6/55",
@@ -170,6 +170,20 @@
         "Added d0 Low/Mid-Odd Lag-1 Carryover (isD0LowMidOddLag1Carryover), Intra-d0 Gap-2 Even Sandwich Hazard (isIntraD0Gap2EvenSandwichHazard), Sandwich-Anchor Lag-4 Even Return (isSandwichAnchorLag4EvenReturn), and Upper-Tail d0 Even-Neighbor Pair Echo (isUpperTailD0EvenNeighborPairEcho) in computeCausalSignalsForSlice",
         "Seeded Slot 1 attempt 0 with the top-6 Master Core subset during High-Zone Continuation and Low-Odd Carryover Equilibrium draws",
         "Elevated #01593 Master Pool coverage from 3/6 to 6/6 (01, 13, 23, 38, 24, 16), achieved 6/6 JACKPOT 1 (22,004,635,500 VND) on Slot 1 (01, 13, 16, 23, 24, 38) plus 2/6 across Slots 2-5, and raised 24-draw walk-forward avgMasterPoolHitsPerDraw to 2.92 and avgUnionHitsPerDraw to 3.63"
+      ]
+    },
+    {
+      "gameType": "6/55",
+      "drawId": "01429",
+      "date": "2026-11-26",
+      "numbers": [14, 18, 24, 28, 34, 55],
+      "bonus": 32,
+      "finding": "Following #01428's extreme 0L-6H upper-tail blowout (36, 40, 43, 46, 50, 55 + Bonus 15, Sum=270, +2.75σ, leaving all 3 Low/Mid Decades 01-10, 11-20, 21-30 empty of main balls and Decade 11-20 empty across both #01427 & #01428), #01429 mean-reverted into 3L-3H & 1O-5E Even-Harmonic equilibrium (Sum=173, +0.13σ, 1 JP2 winner claiming 3.99B VND, resetting JP2 to 3.00B seed). Baseline captured 3/6 in the Master Pool (14, 18, 55) and 2/6 on Slots 2 & 5 with ±1 near-misses on 27->28 and 54->55 because starveLowOddRegime falsely triggered on low0=0 (boosting Low-Odd balls instead of Even empty-decade rebounds) while Gate 2 (2O-4E..4O-2E) and Gate 5 (maxSameLastDigit<=2) blocked 1O-5E and the 14-24-34 modulo-10 .4 harmonic triad. All 7 winning balls (6 main + JP2 bonus 32) converged on 7 causal mechanisms: 14 (-1 neighbor of #01428 Bonus 15 at skip=14) and 18 (#1 W30=7 frequency leader at skip=10) rebounded into double-empty Decade 11-20; 24 (+1 Even neighbor of #01426's 23 at peak Lo-Gan skip=14) and 28 (-1 neighbor of #01427's 29 with W20=3 and #01418/#01416 echoes) rebounded into empty Decade 21-30; 34 bridged -2 from #01428 min-anchor 36 with triple 36-co-occurrences (#01425, #01423, #01420) and #01405 (34, 55 + Bonus 15) co-echo; 55 repeated from #01428 as the upper-boundary Lag-1 anchor sharing #01418 (18, 28, 55) & #01405 (34, 55 + Bonus 15); and JP2 Bonus 32 rebounded at deep skip=30 from #01398 (24, 32, 36, 38).",
+      "evolvedChanges": [
+        "Restricted starveLowOddRegime & starveLowOddWheel to low0Count>=1 and added upperTailBlowoutReboundRegime / upperTailBlowoutReboundNow / upperTailBlowoutReboundWheel when low0Count===0, d0Sum>=250, emptyDecadesCount0>=3, and low1Count<=1",
+        "Added Double-Empty-Decade d0-Bonus Neighbor (isDoubleEmptyDecadeD0BonusNeighbor), Double-Empty-Decade W30 Leader (isDoubleEmptyDecadeW30Leader), Empty-Decade d2-Neighbor Peak Hazard (isEmptyDecadeD2NeighborPeakHazard), Empty-Decade d1-Neighbor Hot Echo (isEmptyDecadeD1NeighborHotEcho), d0-Min-Anchor Multi-Echo Bridge (isD0MinAnchorMultiEchoBridge), Upper-Boundary d0-Bonus Co-Echo Carryover (isUpperBoundaryD0BonusCoEchoCarryover), and Deep-Overdue Decade 31-40 Echo Bonus (isDeepOverdueDecade3EchoBonus) in computeCausalSignalsForSlice",
+        "Added allowMod10Triad (permitting 3-decade modulo-10 arithmetic triads like 14-24-34) and allowSkewParity on Slots 1 & 2 during Upper-Tail Blowout Rebound draws",
+        "Elevated #01429 Master Pool coverage from 3/6 to 6/6 Main + JP2 Bonus (7/7: 55, 28, 34, 14, 24, 18, 32), achieved 6/6 JACKPOT 1 (51,820,878,000 VND) on Slot 1 (14, 18, 24, 28, 34, 55) plus 2/6+Bonus on Slots 2 & 5, and raised 24-draw walk-forward avgMasterPoolHitsPerDraw to 3.21 and avgUnionHitsPerDraw to 3.88"
       ]
     }
   ]
