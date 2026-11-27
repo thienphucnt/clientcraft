@@ -69,7 +69,7 @@ export function RetrospectivePostMortem({
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-mono font-bold uppercase rounded-md bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30">
                 <History className="w-3.5 h-3.5" />
-                v3.0 Closed-Loop Post-Mortem Engine
+                v4.0 Zero-Lookahead Post-Mortem Engine
               </span>
               <span className="px-2.5 py-0.5 text-[11px] font-mono font-semibold rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                 8-Factor Walk-Forward + Residual Error Learning
@@ -165,7 +165,7 @@ export function RetrospectivePostMortem({
               <Cpu className="w-4 h-4 text-purple-500" />
             </div>
             <div className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
-              v3.0 8-Factor Hedge + t=3 Wheel
+              v4.0 Empirical-Bayes + Covering Wheel
             </div>
             <div className="text-[11px] text-purple-600 dark:text-purple-400 font-medium mt-0.5">
               Auto-recalibrates daily at 19:00 ICT

@@ -134,23 +134,34 @@ try {
 
   $unAuditedPowerIds = (@($telemetry.unAuditedPowerDraws) | ForEach-Object { "#$($_.drawId) ($($_.date))" }) -join ", "
   $unAuditedMegaIds = (@($telemetry.unAuditedMegaDraws) | ForEach-Object { "#$($_.drawId) ($($_.date))" }) -join ", "
-  Write-Log "Triggering headless Gemini 4 Argon (High) retrospective: Force=$Force | UnauditedPower=[$unAuditedPowerIds] | UnauditedMega=[$unAuditedMegaIds]"
+  Write-Log "Triggering headless Gemini 4 Carbon (High) retrospective (fallback: Argon High): Force=$Force | UnauditedPower=[$unAuditedPowerIds] | UnauditedMega=[$unAuditedMegaIds]"
 
   $prompt = @"
-In workspace c:/Users/Admin/Documents/antigravity/keen-borg, run the autonomous Gemini 4 Argon (High) Jackpot Day Retrospective & Missed-Day Catch-Up workflow:
-IMPORTANT: For every run_command tool call, always pass WaitMsBeforeAsync: 10000 and keep commands fast (<8s) so no command ever backgrounds.
+In workspace c:/Users/Admin/Documents/antigravity/keen-borg, run the autonomous Jackpot Day Retrospective & Missed-Day Catch-Up workflow:
+IMPORTANT: For every run_command tool call, always pass WaitMsBeforeAsync: 10000 and keep commands fast (<15s) so no command ever backgrounds unexpectedly.
 1. Run `node scripts/auto-evolve-vietlott.mjs` to inspect the latest live draws from raw.githubusercontent.com/vietvudanh/vietlott-data and www.minhngoc.net.vn, plus every missed/un-audited draw in `unAuditedPowerDraws` ($unAuditedPowerCount) and `unAuditedMegaDraws` ($unAuditedMegaCount).
-2. Sync all new or missed draws into `src/data/empiricalSeed2026.ts` (including normalized jackpot prize pools, resetting `currentJackpot1Vnd`/`currentJackpot2Vnd` to minimum seed whenever winners > 0, and updating `learnedWeights`, `hotPool`, `hotWeights`, `coldOverduePool`, `masterCorePool`, `recentDrawsTop2`), and update fallback dates in `src/app/page.tsx`, `src/components/ExecutiveHeader.tsx`, and `src/components/RollingForecastMatrix.tsx`.
-3. Execute a chronological Gemini 4 Argon (High) retrospective across every draw in `unAuditedPowerDraws` and `unAuditedMegaDraws`. Remember the user strictly purchases 5 standard 6-number tickets (`5 x 10,000 VND = 50,000 VND/day`, no Bao-7); on Power 6/55, Jackpot 1 wins on 6/6 main matches and Jackpot 2 wins on 5/6 main + 6th number matching the JP2 special bonus ball. Evaluate the causal pre-draw 5x6 forecast and 14-Ball Master Wheel Pool (`generateDayForecast`) against each settled outcome, diagnose misses / ±1 drifts / sieve bottlenecks, and refine `src/data/empiricalSeed2026.ts`, `src/lib/vietlottData.ts`, and `src/lib/quantEngine.ts` where walk-forward 3+/6..6/6 hit rates or wheeling coverage improve.
+2. Sync all new or missed draws into `src/data/empiricalSeed2026.ts` (including normalized jackpot prize pools, resetting `currentJackpot1Vnd`/`currentJackpot2Vnd` to minimum seed whenever winners > 0, and updating `learnedWeights`, `hotPool`, `hotWeights`, `coldOverduePool`, `masterCorePool`, `recentDrawsTop2` using `buildDynamicGameConfigForDate`), and update fallback dates in `src/app/page.tsx`, `src/components/ExecutiveHeader.tsx`, and `src/components/RollingForecastMatrix.tsx`.
+3. Execute a chronological retrospective across every draw in `unAuditedPowerDraws` and `unAuditedMegaDraws`. Remember the user strictly purchases 5 standard 6-number tickets (`5 x 10,000 VND = 50,000 VND/day`, no Bao-7); on Power 6/55, Jackpot 1 wins on 6/6 main matches and Jackpot 2 wins on 5/6 main + 6th number matching the JP2 special bonus ball.
+   STRICT ANTI-OVERFITTING GUARDRAILS (MANDATORY):
+   - NEVER add single-draw boolean regime predicates, date-specific hacks, static future-pool constants (such as `CAUSAL_PRIOR_HOT_POOL`), or `attempt === 0` hardcoded slot overrides to chase hindsight 6/6 hits on the latest settled draw.
+   - Measure baseline BEFORE any engine edit by running `node scripts/benchmark-oos-holdout.mjs`.
+   - ONLY propose changes to `src/lib/vietlottData.ts` or `src/lib/quantEngine.ts` if they represent mathematically generalizable signals or covering optimizations. After editing, re-run `node scripts/benchmark-oos-holdout.mjs` and compare against the baseline.
+   - Keep code changes in `src/lib/vietlottData.ts` / `src/lib/quantEngine.ts` ONLY if BOTH the 400-draw (`200+200`) and 700-draw (`350+350`) strictly out-of-sample holdout metrics improve without regressing either game. Otherwise immediately run `git checkout -- src/lib/vietlottData.ts src/lib/quantEngine.ts` and commit ONLY the draw sync (`src/data/empiricalSeed2026.ts`, fallback dates, and an honest post-mortem in `src/data/argonRetrospectiveState.json`).
 4. Update `src/data/argonRetrospectiveState.json` with the newly audited draw IDs (`lastAuditedPowerDrawId`, `lastAuditedPowerDrawDate`, `lastAuditedMegaDrawId`, `lastAuditedMegaDrawDate`, `lastAuditedAtIct`, `recentAudits`).
 5. Run `npx.cmd tsc --noEmit` to confirm zero TypeScript errors, commit all updates with `git add` and `git commit`, and push to both `origin master` and `https://github.com/thienphucnt/clientcraft.git master:vietlott-quantmatrix-pro` (which triggers automatic GitHub Pages and Vercel rebuilds).
 "@
 
   $prevAgyPref = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
-  & $AgyExe --model gemini-4-argon-high --effort high --mode accept-edits --dangerously-skip-permissions --print $prompt 2>&1 |
-    ForEach-Object { Write-Log "[agy] $_" }
+  & $AgyExe --model gemini-4-carbon-high --effort high --mode accept-edits --dangerously-skip-permissions --print $prompt 2>&1 |
+    ForEach-Object { Write-Log "[agy:carbon-high] $_" }
   $agyExit = $LASTEXITCODE
+  if ($agyExit -ne 0) {
+    Write-Log "gemini-4-carbon-high exited with status code $agyExit; retrying once with gemini-4-argon-high fallback..."
+    & $AgyExe --model gemini-4-argon-high --effort high --mode accept-edits --dangerously-skip-permissions --print $prompt 2>&1 |
+      ForEach-Object { Write-Log "[agy:argon-high] $_" }
+    $agyExit = $LASTEXITCODE
+  }
   $ErrorActionPreference = $prevAgyPref
 
   # Guarantee tsc verification, commit & push even if agy exited mid-cleanup or skipped git push

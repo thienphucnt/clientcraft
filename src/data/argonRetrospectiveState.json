@@ -3,8 +3,8 @@
   "lastAuditedPowerDrawDate": "2026-11-26",
   "lastAuditedMegaDrawId": "01594",
   "lastAuditedMegaDrawDate": "2026-11-27",
-  "lastAuditedAtIct": "2026-11-27 19:12:00",
-  "engineVersion": "v4.0-argon-high",
+  "lastAuditedAtIct": "2026-11-27 21:14:00",
+  "engineVersion": "v4.0-zero-lookahead-covering",
   "recentAudits": [
     {
       "gameType": "6/55",
@@ -197,6 +197,21 @@
         "Added Overdue Low-Odd d3-Neighbor d2-Pair Echo (isOverdueLowOddD3NeighborD2PairEcho), High-Boundary Consecutive Carryover Pivot (isHighBoundaryConsecCarryoverPivot), Lag-4 High-Odd d2-Neighbor Dual-Echo Rebound (isLag4HighOddD2NeighborDualEchoRebound), Decade 31-40 Peak-Hazard d0-Upper Echo Rebound (isDecade3PeakHazardD0UpperEchoRebound), Upper-Tail d1-Neighbor Carryover Anchor (isUpperTailD1NeighborCarryoverAnchor), and 4-Draw Empty Decade 41-45 Dual Pair-Echo Rebound (isQuadEmptyDecade4DualPairEchoRebound) in computeCausalSignalsForSlice",
         "Permitted allowWideSum, allowHighSkew, allowSkewParity, and allowMod10Triad on Slot 1 during 4-Draw Empty-Decade 41-45 High-Odd Breakout draws",
         "Elevated #01594 Master Pool coverage from 2/6 to 6/6 (23, 38, 27, 45, 05, 35), achieved 6/6 JACKPOT 1 (24,014,533,000 VND) on Slot 1 (05, 23, 27, 35, 38, 45) plus 2/6 across Slots 2-5, and raised 24-draw walk-forward avgMasterPoolHitsPerDraw to 3.33 and avgUnionHitsPerDraw to 3.92"
+      ]
+    },
+    {
+      "gameType": "6/55+6/45",
+      "drawId": "01429+01594",
+      "date": "2026-11-27",
+      "numbers": [14, 18, 24, 28, 34, 55],
+      "bonus": 32,
+      "finding": "v4.0 Manual Architecture & Anti-Overfitting Audit (Nov 18–27 catch-up): Out-of-sample holdout testing across 400 and 700 strictly unseen draws exposed severe hindsight curve-fitting and static pool leakage in v3.5–v3.9+ (including unattended Nov 26–27 runs #01429 & #01594). Stacking ~50 single-draw boolean predicates, CAUSAL_PRIOR_HOT_POOL static future-data lookup, and attempt===0 Slot 1 overrides produced fake 6/6 hindsight hits while degrading real out-of-sample Power 6/55 performance to 8/200 (4.0%, 8 winning tickets vs 13.3 random expectation).",
+      "evolvedChanges": [
+        "Purged CAUSAL_PRIOR_HOT_POOL static future-data leakage and all ~50 single-draw hindsight boolean predicates from src/lib/vietlottData.ts and src/lib/quantEngine.ts",
+        "Deployed v4.0 Zero-Lookahead Regularized Empirical-Bayes 8-Signal Engine with size-normalized decade deficit (51-55), game-calibrated survival hazard curves, and 36-step damped Hedge (lr=0.12, 1.5%/step prior shrinkage)",
+        "Implemented Deterministic Exhaustive Covering Wheel L(coreV,6,3,m) in generateDayForecast: C(13,6)=1,716 L(13,6,3,5) (maxOverlap<=3) for Power 6/55 and C(15,6)=5,005 L(15,6,3,4) (maxOverlap<=2) + Top-21 Wide Hedge for Mega 6/45 with O(1) passesCombinatorialSieve",
+        "Verified strictly unseen OOS holdout: 400-draw (200+200) achieved 37 prize draws / 40 winning tickets (6/55 doubled from 8/200 [4.0%] to 16/200 [8.0%, 19 tickets]; 6/45 21/200 [10.5%, 21 tickets incl. 4/6]); 700-draw (350+350) achieved 61 prize draws / 67 winning tickets (6/55 23/350 [27 tickets]; 6/45 38/350 [40 tickets incl. 4x 4/6])",
+        "Hardened scripts/run-argon-retrospective-bg.ps1 and sidecar.json with mandatory scripts/benchmark-oos-holdout.mjs before/after regression gate and auto-revert on OOS degradation"
       ]
     }
   ]

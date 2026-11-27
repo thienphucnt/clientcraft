@@ -233,23 +233,25 @@ export function computeDeltas(combo: number[]): number[] {
   return deltas;
 }
 
+export interface CombinatorialSieveOptions {
+  allowWideSum?: boolean;
+  allowHighSkew?: boolean;
+  allowAllHighOrLow?: boolean;
+  allowSkewParity?: boolean;
+  allowTwoConsecPairs?: boolean;
+  allowThreeDecades?: boolean;
+  allowMod10Triad?: boolean;
+  customConfig?: GameConfig;
+  customDraws?: HistoricalDraw[];
+}
+
 /**
  * Full 6-Gate Combinatorial Sieve Inspector & Validator
  */
 export function inspectCombinatorialSieve(
   combo: number[],
   gameType: GameType,
-  options?: {
-    allowWideSum?: boolean;
-    allowSnapbackSum?: boolean;
-    allowUpperTailContinuation?: boolean;
-    allowHighSkew?: boolean;
-    allowSkewParity?: boolean;
-    allowTwoConsecPairs?: boolean;
-    allowMod10Triad?: boolean;
-    customConfig?: GameConfig;
-    customDraws?: HistoricalDraw[];
-  }
+  options?: CombinatorialSieveOptions
 ): SieveInspectionReport {
   const cfg: GameConfig = options?.customConfig ?? GAME_CONFIGS[gameType];
   const sc = [...combo].sort((a, b) => a - b);
@@ -274,11 +276,7 @@ export function inspectCombinatorialSieve(
   const zScore = Number((meanDiff / cfg.stdDevSum).toFixed(2));
 
   // Gate 1: Gaussian Sum Corridor
-  const [minSum, maxSum] = options?.allowUpperTailContinuation
-    ? [cfg.corridor80[0], Math.round(cfg.meanSum + 2.9 * cfg.stdDevSum)]
-    : options?.allowSnapbackSum
-    ? [cfg.corridor80[0], Math.round(cfg.meanSum + 2.05 * cfg.stdDevSum)]
-    : options?.allowWideSum
+  const [minSum, maxSum] = options?.allowWideSum
     ? cfg.corridor80
     : cfg.corridor70;
   const gate1Passed = isValidInput && sum >= minSum && sum <= maxSum;
@@ -294,8 +292,8 @@ export function inspectCombinatorialSieve(
   const lowCount = sc.filter((n) => n <= cfg.midPoint).length;
   const highCount = 6 - lowCount;
   const lowHighLabel = `${lowCount}L-${highCount}H`;
-  const validLows = options?.allowUpperTailContinuation
-    ? [0, 1, 2, 3, 4, 5]
+  const validLows = options?.allowAllHighOrLow
+    ? [0, 1, 2, 3, 4, 5, 6]
     : options?.allowHighSkew
     ? [1, 2, 3, 4, 5]
     : [2, 3, 4];
@@ -323,13 +321,12 @@ export function inspectCombinatorialSieve(
     mod10Counts.set(d, (mod10Counts.get(d) ?? 0) + 1);
   }
   const maxSameLastDigit = Math.max(0, ...Array.from(mod10Counts.values()));
-  const minDecadesRequired =
-    options?.allowUpperTailContinuation && lowCount <= 1 ? 3 : 4;
-  const maxLastDigitAllowed = options?.allowMod10Triad ? 3 : 2;
+  const minDecadesRequired = options?.allowThreeDecades ? 3 : 4;
+  const maxSameLastDigitAllowed = options?.allowMod10Triad ? 3 : 2;
   const gate5Passed =
     isValidInput &&
     distinctDecades >= minDecadesRequired &&
-    maxSameLastDigit <= maxLastDigitAllowed;
+    maxSameLastDigit <= maxSameLastDigitAllowed;
 
   // Gate 6: Recent Draw Collision Guard (< 4 shared with last 2 draws)
   let maxCollisionCount = 0;
@@ -395,7 +392,9 @@ export function inspectCombinatorialSieve(
       name: "Gate 3: Low/High Half-Space Split",
       passed: gate3Passed,
       actualValue: lowHighLabel,
-      expectedRule: options?.allowHighSkew
+      expectedRule: options?.allowAllHighOrLow
+        ? `0L-6H to 6L-0H (Mid = ${cfg.midPoint})`
+        : options?.allowHighSkew
         ? `1L-5H to 5L-1H (Mid = ${cfg.midPoint})`
         : `2L-4H, 3L-3H, or 4L-2H (Mid = ${cfg.midPoint})`,
       detail: gate3Passed
@@ -419,10 +418,10 @@ export function inspectCombinatorialSieve(
       name: "Gate 5: Decade & Mod-10 Spread",
       passed: gate5Passed,
       actualValue: `${distinctDecades} decades, max ${maxSameLastDigit} same last digit`,
-      expectedRule: "≥ 4 decades & ≤ 2 shared terminal digits",
+      expectedRule: `≥ ${minDecadesRequired} decades & ≤ ${maxSameLastDigitAllowed} shared terminal digits`,
       detail: gate5Passed
         ? "Strong decade coverage and terminal digit dispersion."
-        : "Insufficient decade breadth (<4) or terminal digit clustering (>2).",
+        : `Insufficient decade breadth (<${minDecadesRequired}) or terminal digit clustering (>${maxSameLastDigitAllowed}).`,
     },
     {
       gateNumber: 6,
@@ -472,24 +471,90 @@ export function inspectCombinatorialSieve(
 }
 
 /**
- * Fast boolean 6-Gate Combinatorial Sieve check used by the 5 Strategy Samplers
+ * Fast O(1) boolean 6-Gate Combinatorial Sieve check used by covering wheel generators.
+ * Equivalent in outcome to inspectCombinatorialSieve(combo, gameType, options).passedAllGates
+ * without paying the expensive UI pairwise-lift & report allocation overhead.
  */
 export function passesCombinatorialSieve(
   combo: number[],
   gameType: GameType,
-  options?: {
-    allowWideSum?: boolean;
-    allowSnapbackSum?: boolean;
-    allowUpperTailContinuation?: boolean;
-    allowHighSkew?: boolean;
-    allowSkewParity?: boolean;
-    allowTwoConsecPairs?: boolean;
-    allowMod10Triad?: boolean;
-    customConfig?: GameConfig;
-    customDraws?: HistoricalDraw[];
-  }
+  options?: CombinatorialSieveOptions
 ): boolean {
-  return inspectCombinatorialSieve(combo, gameType, options).passedAllGates;
+  if (combo.length !== 6) return false;
+  const cfg: GameConfig = options?.customConfig ?? GAME_CONFIGS[gameType];
+  const sc = [...combo].sort((a, b) => a - b);
+
+  let sum = 0;
+  let oddCount = 0;
+  let lowCount = 0;
+  let consecPairs = 0;
+  let decMask = 0;
+  let distinctDecades = 0;
+  const mod10Counts = new Uint8Array(10);
+  const maxSameLastDigitAllowed = options?.allowMod10Triad ? 3 : 2;
+
+  for (let i = 0; i < 6; i++) {
+    const n = sc[i];
+    if (!Number.isInteger(n) || n < 1 || n > cfg.maxNum) return false;
+    if (i > 0 && n === sc[i - 1]) return false;
+
+    sum += n;
+    if ((n & 1) !== 0) oddCount++;
+    if (n <= cfg.midPoint) lowCount++;
+    if (i < 5 && sc[i + 1] - n === 1) consecPairs++;
+    if (i < 4 && sc[i + 2] - n === 2) return false;
+
+    const decBit = 1 << Math.floor((n - 1) / 10);
+    if ((decMask & decBit) === 0) {
+      decMask |= decBit;
+      distinctDecades++;
+    }
+
+    const m = n % 10;
+    const mCount = ++mod10Counts[m];
+    if (mCount > maxSameLastDigitAllowed) return false;
+  }
+
+  // Gate 1: Gaussian Sum Corridor
+  const [minSum, maxSum] = options?.allowWideSum
+    ? cfg.corridor80
+    : cfg.corridor70;
+  if (sum < minSum || sum > maxSum) return false;
+
+  // Gate 2: Odd/Even Parity
+  if (options?.allowSkewParity) {
+    if (oddCount < 1 || oddCount > 5) return false;
+  } else {
+    if (oddCount < 2 || oddCount > 4) return false;
+  }
+
+  // Gate 3: Low/High Half-Space Split
+  if (!options?.allowAllHighOrLow) {
+    if (options?.allowHighSkew) {
+      if (lowCount < 1 || lowCount > 5) return false;
+    } else {
+      if (lowCount < 2 || lowCount > 4) return false;
+    }
+  }
+
+  // Gate 4: Consecutive Adjacency Cap
+  const maxConsecAllowed = options?.allowTwoConsecPairs ? 2 : 1;
+  if (consecPairs > maxConsecAllowed) return false;
+
+  // Gate 5: Decade & Modulo-10 Dispersion
+  const minDecadesRequired = options?.allowThreeDecades ? 3 : 4;
+  if (distinctDecades < minDecadesRequired) return false;
+
+  // Gate 6: Recent Draw Collision Guard (< 4 shared with last 2 draws)
+  for (const rDraw of cfg.recentDrawsTop2) {
+    let overlap = 0;
+    for (let i = 0; i < 6; i++) {
+      if (rDraw.includes(sc[i])) overlap++;
+    }
+    if (overlap >= 4) return false;
+  }
+
+  return true;
 }
 
 /**
@@ -591,16 +656,7 @@ export function generateDayForecast(
   const seedInt = hashStringToUint32(seedKey);
   const seedHash = `0x${seedInt.toString(16).toUpperCase().padStart(8, "0")}`;
   const rng = new Mulberry32PRNG(seedInt);
-
-  const allNums = Array.from({ length: cfg.maxNum }, (_, idx) => idx + 1);
-  const usedSignatures = new Set<string>();
   const ballots: GeneratedBallot[] = [];
-
-  // Apply Markov Virtual-Draw Propagation attenuation (gamma = 0.88) to hot weights
-  const adjustedHotWeights = cfg.hotPool.map((ball, idx) => {
-    const baseW = cfg.hotWeights[idx] ?? 100;
-    return attenuatedNumbers.has(ball) ? baseW * 0.88 : baseW;
-  });
 
   const sieveOpts = {
     customConfig: cfg,
@@ -608,155 +664,39 @@ export function generateDayForecast(
   };
 
   // =========================================================================
-  // v2.0 SELF-LEARNING CONVICTION WEIGHTS & t=3 ABBREVIATED COVERING WHEEL
-  // Concentrates high-conviction balls into a 14-Ball Master Pool and coordinates
-  // the 5 daily tickets so they maximize distinct 3-ball combination coverage
-  // (100 distinct triplets across 5 tickets) with maxTicketOverlap <= 2.
+  // v4.0 DETERMINISTIC EXHAUSTIVE COVERING WHEEL L(coreV, 6, 3, m)
+  // Power 6/55: Exhaustive C(13,6)=1,716 L(13,6,3,5) across Top-13 Core Pool (maxOverlap <= 3)
+  // Mega 6/45:  Exhaustive C(15,6)=5,005 Slots 1-4 (maxOverlap <= 2) + Slot 5 Top-21 Wide Hedge
   // =========================================================================
+  const is55 = gameType === "6/55";
   const masterCorePool = cfg.masterCorePool ?? cfg.hotPool.slice(0, 14);
-  const masterSet = new Set(masterCorePool);
+  const coreV = is55 ? 13 : 15;
+  const slot5WideV = is55 ? 13 : 21;
+  const maxAllowedOverlap = is55 ? 3 : 2;
+
+  const coreWheelPool = cfg.hotPool.slice(0, coreV);
+  const effectiveCoreV = coreWheelPool.length;
+  const wideWheelPool = cfg.hotPool.slice(0, slot5WideV);
+
   const priorSourceDraws = [...sourceDraws]
     .filter((d) => d.date < targetDateStr)
     .sort((a, b) => b.date.localeCompare(a.date));
-  const lagUnionSet = new Set([
-    ...(cfg.recentDrawsTop2[0] ?? []),
-    ...(cfg.recentDrawsTop2[1] ?? []),
-    ...(priorSourceDraws[0]?.bonus !== undefined
-      ? [priorSourceDraws[0].bonus]
-      : []),
-    ...(priorSourceDraws[1]?.bonus !== undefined
-      ? [priorSourceDraws[1].bonus]
-      : []),
-  ]);
 
-  // Identify Empty Decades & Extreme Parity Skew in the immediately preceding draws (Retrospective Factors 8 & 9)
-  const lastDrawNums = cfg.recentDrawsTop2[0] ?? [];
-  const prev2DrawNums = cfg.recentDrawsTop2[1] ?? [];
-  const prev3DrawNums = priorSourceDraws[2]?.numbers ?? [];
-  const prev4DrawNums = priorSourceDraws[3]?.numbers ?? [];
-  const odd0Count = lastDrawNums.filter((x) => x % 2 !== 0).length;
-  const odd1Count = prev2DrawNums.filter((x) => x % 2 !== 0).length;
-  const odd2Count = prev3DrawNums.filter((x) => x % 2 !== 0).length;
-  const odd3Count = prev4DrawNums.filter((x) => x % 2 !== 0).length;
-  const starveEvenWheel =
-    lastDrawNums.length === 6 &&
-    ((odd0Count === 6 && odd1Count >= 3) ||
-      (prev2DrawNums.length === 6 && odd0Count + odd1Count >= 10));
-  const starveOddWheel =
-    lastDrawNums.length === 6 &&
-    ((odd0Count === 0 && odd1Count <= 3) ||
-      (prev2DrawNums.length === 6 && odd0Count + odd1Count <= 2)) &&
-    odd2Count + odd3Count < 10;
-  const evenAftershockWheel =
-    lastDrawNums.length === 6 &&
-    prev2DrawNums.length === 6 &&
-    prev3DrawNums.length === 6 &&
-    prev4DrawNums.length === 6 &&
-    odd0Count + odd1Count <= 2 &&
-    odd2Count + odd3Count >= 10;
-  const low0Count = lastDrawNums.filter((x) => x <= cfg.midPoint).length;
-  const low1Count = prev2DrawNums.filter((x) => x <= cfg.midPoint).length;
-  const low2Count = prev3DrawNums.filter((x) => x <= cfg.midPoint).length;
-  const lowOdd0Count = lastDrawNums.filter(
-    (x) => x <= cfg.midPoint && x % 2 !== 0
-  ).length;
-  const lowOdd1Count = prev2DrawNums.filter(
-    (x) => x <= cfg.midPoint && x % 2 !== 0
-  ).length;
-  const lowOdd2Count = prev3DrawNums.filter(
-    (x) => x <= cfg.midPoint && x % 2 !== 0
-  ).length;
-  const lowOdd3Count = prev4DrawNums.filter(
-    (x) => x <= cfg.midPoint && x % 2 !== 0
-  ).length;
-  const starveLowOddWheel =
-    lastDrawNums.length === 6 &&
-    prev2DrawNums.length === 6 &&
-    low0Count >= 1 &&
-    low0Count <= 2 &&
-    low1Count <= 2 &&
-    lowOdd0Count === 0 &&
-    lowOdd0Count + lowOdd1Count <= 1;
-  const evenWaveLowOddReboundWheel =
-    lastDrawNums.length === 6 &&
-    prev2DrawNums.length === 6 &&
-    prev3DrawNums.length === 6 &&
-    odd0Count + odd1Count + odd2Count <= 3 &&
-    lowOdd0Count + lowOdd1Count + lowOdd2Count === 0;
-  const lowOddCarryoverEquilibriumWheel =
-    lastDrawNums.length === 6 &&
-    prev2DrawNums.length === 6 &&
-    prev3DrawNums.length === 6 &&
-    prev4DrawNums.length === 6 &&
-    odd0Count >= 4 &&
-    low0Count >= 4 &&
-    lowOdd0Count >= 2 &&
-    odd1Count + odd2Count + odd3Count <= 3 &&
-    lowOdd1Count + lowOdd2Count + lowOdd3Count === 0;
-  const highZoneSnapbackWheel =
-    lastDrawNums.length === 6 &&
-    prev2DrawNums.length === 6 &&
-    prev3DrawNums.length === 6 &&
-    low0Count >= 4 &&
-    odd0Count >= 5 &&
-    low1Count <= 2 &&
-    low2Count <= 2;
-  const lastDrawSum = lastDrawNums.reduce((acc, v) => acc + v, 0);
-  const highZoneContinuationWheel =
-    lastDrawNums.length === 6 &&
-    prev2DrawNums.length === 6 &&
-    prev3DrawNums.length === 6 &&
-    low0Count <= 1 &&
-    lastDrawSum >= 220 &&
-    low1Count >= 4 &&
-    odd1Count >= 5 &&
-    low2Count <= 2;
-  const upperTailBlowoutReboundWheel =
-    lastDrawNums.length === 6 &&
-    prev2DrawNums.length === 6 &&
-    low0Count === 0 &&
-    lastDrawSum >= 250 &&
-    low1Count <= 1;
-  const prev2DrawSum = prev2DrawNums.reduce((acc, v) => acc + v, 0);
-  const prev3DrawSum = prev3DrawNums.reduce((acc, v) => acc + v, 0);
-  const quadEmptyDecade4BreakoutWheel =
-    cfg.maxNum === 45 &&
-    lastDrawNums.length === 6 &&
-    prev2DrawNums.length === 6 &&
-    prev3DrawNums.length === 6 &&
-    prev4DrawNums.length === 6 &&
-    lastDrawSum <= 116 &&
-    prev2DrawSum <= 116 &&
-    prev3DrawSum <= 116 &&
-    !lastDrawNums.some((x) => x > 40) &&
-    !prev2DrawNums.some((x) => x > 40) &&
-    !prev3DrawNums.some((x) => x > 40) &&
-    !prev4DrawNums.some((x) => x > 40);
-  const specialCatalyzedWheel =
-    highZoneSnapbackWheel ||
-    evenWaveLowOddReboundWheel ||
-    highZoneContinuationWheel ||
-    lowOddCarryoverEquilibriumWheel ||
-    upperTailBlowoutReboundWheel ||
-    quadEmptyDecade4BreakoutWheel;
-  const top7SnapbackSet = new Set(
-    masterCorePool.slice(
-      0,
-      evenWaveLowOddReboundWheel ||
-        lowOddCarryoverEquilibriumWheel ||
-        highZoneContinuationWheel ||
-        upperTailBlowoutReboundWheel ||
-        quadEmptyDecade4BreakoutWheel
-        ? 6
-        : 7
-    )
+  // Precompute O(1) Laplace-smoothed Pairwise Co-Occurrence Matrix over strictly prior 150 draws
+  const pairWindow = priorSourceDraws.slice(0, 150);
+  const pairWindowLen = Math.max(1, pairWindow.length);
+  const expectedPairProb = 30 / (cfg.maxNum * (cfg.maxNum - 1));
+  const pairCoMatrix: Uint16Array[] = Array.from(
+    { length: cfg.maxNum + 1 },
+    () => new Uint16Array(cfg.maxNum + 1)
   );
-
-  const maxDecadeIdx = Math.floor((cfg.maxNum - 1) / 10);
-  const emptyDecadesSet = new Set<number>();
-  for (let dIdx = 0; dIdx <= maxDecadeIdx; dIdx++) {
-    if (!lastDrawNums.some((x) => Math.floor((x - 1) / 10) === dIdx)) {
-      emptyDecadesSet.add(dIdx);
+  for (const d of pairWindow) {
+    const ns = d.numbers;
+    for (let i = 0; i < ns.length; i++) {
+      for (let j = i + 1; j < ns.length; j++) {
+        pairCoMatrix[ns[i]][ns[j]]++;
+        pairCoMatrix[ns[j]][ns[i]]++;
+      }
     }
   }
 
@@ -765,170 +705,355 @@ export function generateDayForecast(
     return attenuatedNumbers.has(b) ? Math.round(raw * 0.88) : raw;
   };
 
-  const getWeightsForPool = (pool: number[]): number[] =>
-    pool.map((b) => getBallConviction(b));
+  const wheelSieveOpts: CombinatorialSieveOptions = {
+    ...sieveOpts,
+    allowWideSum: true,
+    allowHighSkew: true,
+    allowAllHighOrLow: true,
+    allowSkewParity: true,
+    allowTwoConsecPairs: true,
+    allowThreeDecades: true,
+    allowMod10Triad: true,
+  };
 
-  const coveredTriplets = new Set<string>();
-  const selectedTicketsList: number[][] = [];
-  const ballUsageCount = new Map<number, number>();
+  const popcount = (x: number): number => {
+    let v = x | 0;
+    let c = 0;
+    while (v !== 0) {
+      v &= v - 1;
+      c++;
+    }
+    return c;
+  };
 
-  const getTripletsOfTicket = (nums: number[]): string[] => {
-    const sc = [...nums].sort((a, b) => a - b);
-    const out: string[] = [];
-    for (let i = 0; i < 4; i++) {
-      for (let j = i + 1; j < 5; j++) {
-        for (let k = j + 1; k < 6; k++) {
-          out.push(`${sc[i]}-${sc[j]}-${sc[k]}`);
+  interface CoveringBlock {
+    nums: number[];
+    mask: number;
+    idxs: [number, number, number, number, number, number];
+    conv: number;
+    pLift: number;
+  }
+
+  const computeBlockStats = (
+    nums: number[],
+    mask: number,
+    idxs: [number, number, number, number, number, number]
+  ): CoveringBlock => {
+    let conv = 0;
+    let pLift = 0;
+    const denom = pairWindowLen * expectedPairProb + 1;
+    for (let i = 0; i < 6; i++) {
+      conv += getBallConviction(nums[i]);
+      for (let j = i + 1; j < 6; j++) {
+        pLift += (pairCoMatrix[nums[i]][nums[j]] + 1) / denom;
+      }
+    }
+    return { nums, mask, idxs, conv, pLift };
+  };
+
+  const enumerateCoveringBlocks = (applySieve: boolean): CoveringBlock[] => {
+    const out: CoveringBlock[] = [];
+    for (let a = 0; a < effectiveCoreV - 5; a++) {
+      for (let b = a + 1; b < effectiveCoreV - 4; b++) {
+        for (let c = b + 1; c < effectiveCoreV - 3; c++) {
+          for (let d = c + 1; d < effectiveCoreV - 2; d++) {
+            for (let e = d + 1; e < effectiveCoreV - 1; e++) {
+              for (let f = e + 1; f < effectiveCoreV; f++) {
+                const nums = [
+                  coreWheelPool[a],
+                  coreWheelPool[b],
+                  coreWheelPool[c],
+                  coreWheelPool[d],
+                  coreWheelPool[e],
+                  coreWheelPool[f],
+                ].sort((x, y) => x - y);
+                if (
+                  !applySieve ||
+                  passesCombinatorialSieve(nums, gameType, wheelSieveOpts)
+                ) {
+                  const mask =
+                    (1 << a) |
+                    (1 << b) |
+                    (1 << c) |
+                    (1 << d) |
+                    (1 << e) |
+                    (1 << f);
+                  out.push(computeBlockStats(nums, mask, [a, b, c, d, e, f]));
+                }
+              }
+            }
+          }
         }
       }
     }
     return out;
   };
 
-  const registerSelectedTicket = (nums: number[]) => {
-    const sc = [...nums].sort((a, b) => a - b);
-    selectedTicketsList.push(sc);
-    for (const n of sc) {
-      ballUsageCount.set(n, (ballUsageCount.get(n) ?? 0) + 1);
-    }
-    for (const t of getTripletsOfTicket(sc)) {
-      coveredTriplets.add(t);
-    }
-  };
+  let coveringBlocks = enumerateCoveringBlocks(true);
+  if (coveringBlocks.length < 5) {
+    coveringBlocks = enumerateCoveringBlocks(false);
+  }
 
-  const scoreCandidateWheelFit = (cand: number[]): number => {
-    // 1. Check overlap with already selected tickets on the same day
-    let maxTicketOverlap = 0;
-    for (const prev of selectedTicketsList) {
-      let ov = 0;
-      for (const n of cand) {
-        if (prev.includes(n)) ov++;
+  // Flat typed arrays for O(20) triplet coverage tracking across [0..effectiveCoreV-1]
+  const triStride2 = effectiveCoreV * effectiveCoreV;
+  const triArrayLen = effectiveCoreV * triStride2;
+  const cov3 = new Uint8Array(triArrayLen);
+  const triWeight = new Float32Array(triArrayLen);
+  for (let a = 0; a < effectiveCoreV - 2; a++) {
+    for (let b = a + 1; b < effectiveCoreV - 1; b++) {
+      for (let c = b + 1; c < effectiveCoreV; c++) {
+        triWeight[(a * effectiveCoreV + b) * effectiveCoreV + c] =
+          1 + (3 * effectiveCoreV - (a + b + c)) * 0.03;
       }
-      if (ov > maxTicketOverlap) maxTicketOverlap = ov;
     }
-    // Strongly penalize sharing >= 3 numbers with another ticket on the same day
-    // so every ticket covers 20 brand-new 3-number combinations!
-    const overlapPenalty =
-      maxTicketOverlap >= 3 ? -2500 * (maxTicketOverlap - 2) : 0;
+  }
 
-    // 2. Conviction score sum + Master Core Pool concentration + Balanced 5x6 Frequency Cap + Retrospective Structural Bonuses
-    let convictionSum = 0;
-    let masterHits = 0;
-    let restedMasterHits = 0;
-    let evenMasterHits = 0;
-    let snapbackTop7Hits = 0;
-    let lowOddHits = 0;
-    let lagRepeatHits = 0;
-    let neighborShiftHits = 0;
-    let parityReboundHits = 0;
-    let frequencyBalanceBonus = 0;
-    let emptyDecadeHits = 0;
-    let sandwichBridgeHits = 0;
-    for (const n of cand) {
-      convictionSum += getBallConviction(n);
-      const used = ballUsageCount.get(n) ?? 0;
-      if (masterSet.has(n)) {
-        masterHits++;
-        if (!lagUnionSet.has(n)) restedMasterHits++;
-        if (n % 2 === 0) evenMasterHits++;
-        if (top7SnapbackSet.has(n)) snapbackTop7Hits++;
-        // Across 5 tickets of 6 numbers (30 ball-slots), each of the 14 Master Pool balls
-        // should ideally appear 2 times (14 * 2 = 28 slots) for complete t=3 wheeling coverage.
-        if (used === 0) {
-          frequencyBalanceBonus += 68;
-        } else if (used === 1) {
-          frequencyBalanceBonus += 32;
-        } else if (used === 2) {
-          frequencyBalanceBonus -= 85;
-        } else if (used >= 3) {
-          frequencyBalanceBonus -= 220 * (used - 1);
+  const coreSlots = slot5WideV > effectiveCoreV ? 4 : 5;
+  const chosenCoreBlocks: CoveringBlock[] = [];
+  const usedIdxCount = new Int32Array(effectiveCoreV);
+
+  for (let s = 0; s < coreSlots; s++) {
+    let best: CoveringBlock | null = null;
+    let bestSc = -Infinity;
+
+    for (let bi = 0; bi < coveringBlocks.length; bi++) {
+      const blk = coveringBlocks[bi];
+      if (chosenCoreBlocks.some((c) => c.mask === blk.mask)) continue;
+
+      let exceedsOverlap = false;
+      for (let ci = 0; ci < chosenCoreBlocks.length; ci++) {
+        if (popcount(chosenCoreBlocks[ci].mask & blk.mask) > maxAllowedOverlap) {
+          exceedsOverlap = true;
+          break;
         }
-      } else if (used >= 2) {
-        frequencyBalanceBonus -= 150 * (used - 1);
       }
-      if (n <= cfg.midPoint && n % 2 !== 0) lowOddHits++;
-      if (lagUnionSet.has(n)) lagRepeatHits++;
-      if (lagUnionSet.has(n - 1) || lagUnionSet.has(n + 1)) neighborShiftHits++;
-      if ((starveEvenWheel && n % 2 === 0) || (starveOddWheel && n % 2 !== 0)) {
-        parityReboundHits++;
-      }
-      if (emptyDecadesSet.has(Math.floor((n - 1) / 10))) emptyDecadeHits++;
-      if (
-        (lagUnionSet.has(n - 1) && lagUnionSet.has(n + 1)) ||
-        (lagUnionSet.has(n - 2) && lagUnionSet.has(n + 2))
-      ) {
-        sandwichBridgeHits++;
-      }
-    }
+      if (exceedsOverlap) continue;
 
-    // Empirical Lag-1/Lag-2 Repeat Anchor Bonus (1 to 2 repeats from last 2 draws is optimal;
-    // when extreme parity drought or low-odd drought is active, ±1 neighbor shifts or rested Master Pool balls substitute)
-    const lagBonus =
-      specialCatalyzedWheel && snapbackTop7Hits >= 4
-        ? 125 + snapbackTop7Hits * 42
-        : evenAftershockWheel && evenMasterHits >= 3
-        ? 110 + evenMasterHits * 35
-        : starveLowOddWheel && restedMasterHits >= 4
-        ? 115 + restedMasterHits * 28
-        : lagRepeatHits === 1 || lagRepeatHits === 2
-        ? 110
-        : lagRepeatHits === 3
-        ? 45
-        : (starveEvenWheel || starveOddWheel) && neighborShiftHits >= 2
-        ? 95
-        : 0;
-
-    // Parity Mean-Reversion & Neighbor Shift Bonus after 6:0 / 11:1 extreme parity draws or Low-Odd starvation
-    const parityWheelBonus =
-      specialCatalyzedWheel
-        ? snapbackTop7Hits * 68 + restedMasterHits * 26
-        : starveEvenWheel || starveOddWheel
-        ? (parityReboundHits >= 4 ? 115 : parityReboundHits * 22) +
-          Math.min(4, neighborShiftHits) * 34
-        : evenAftershockWheel
-        ? evenMasterHits * 58 + restedMasterHits * 24
-        : starveLowOddWheel
-        ? Math.min(4, lowOddHits) * 38 + restedMasterHits * 34
-        : 0;
-
-    // Retrospective Empty-Decade Mean-Reversion & Sandwich Midpoint Bonus
-    const maxEmptyCap = Math.max(2, Math.min(4, emptyDecadesSet.size));
-    const retrospectiveStructuralBonus =
-      Math.min(maxEmptyCap, emptyDecadeHits) * 52 +
-      Math.min(3, sandwichBridgeHits) * 46 +
-      parityWheelBonus;
-
-    // 3. Marginal t=3 Triplet Coverage Gain
-    let newTriplets = 0;
-    let newMasterTriplets = 0;
-    const sc = [...cand].sort((a, b) => a - b);
-    for (let i = 0; i < 4; i++) {
-      for (let j = i + 1; j < 5; j++) {
-        for (let k = j + 1; k < 6; k++) {
-          const key = `${sc[i]}-${sc[j]}-${sc[k]}`;
-          if (!coveredTriplets.has(key)) {
-            newTriplets++;
-            const mCount =
-              (masterSet.has(sc[i]) ? 1 : 0) +
-              (masterSet.has(sc[j]) ? 1 : 0) +
-              (masterSet.has(sc[k]) ? 1 : 0);
-            if (mCount >= 2) newMasterTriplets++;
+      let g3 = 0;
+      const idxs = blk.idxs;
+      for (let p = 0; p < 4; p++) {
+        const ip = idxs[p];
+        for (let q = p + 1; q < 5; q++) {
+          const baseIdx = (ip * effectiveCoreV + idxs[q]) * effectiveCoreV;
+          for (let r = q + 1; r < 6; r++) {
+            const triIdx = baseIdx + idxs[r];
+            if (cov3[triIdx] === 0) {
+              g3 += triWeight[triIdx];
+            }
           }
         }
       }
+
+      let bal = 0;
+      for (let p = 0; p < 6; p++) {
+        const u = usedIdxCount[idxs[p]];
+        if (u === 0) bal += 28;
+        else if (u === 1) bal += 14;
+        else if (u === 2) bal += maxAllowedOverlap >= 3 ? 4 : -45;
+        else bal -= 120 * (u - 2);
+      }
+
+      const sc = blk.conv + bal + blk.pLift * 14 + g3 * 22;
+      if (sc > bestSc) {
+        bestSc = sc;
+        best = blk;
+      }
     }
 
-    return (
-      convictionSum +
-      masterHits * 32 +
-      lagBonus +
-      frequencyBalanceBonus +
-      retrospectiveStructuralBonus +
-      newTriplets * 18 +
-      newMasterTriplets * 35 +
-      overlapPenalty
+    // Fallback: relax overlap bound to minimum achievable overlap among remaining unused blocks
+    if (!best) {
+      let bestOv = Infinity;
+      let bestFallbackSc = -Infinity;
+      for (const blk of coveringBlocks) {
+        if (chosenCoreBlocks.some((c) => c.mask === blk.mask)) continue;
+        let maxOv = 0;
+        for (const c of chosenCoreBlocks) {
+          const ov = popcount(c.mask & blk.mask);
+          if (ov > maxOv) maxOv = ov;
+        }
+        if (
+          maxOv < bestOv ||
+          (maxOv === bestOv && blk.conv > bestFallbackSc)
+        ) {
+          bestOv = maxOv;
+          bestFallbackSc = blk.conv;
+          best = blk;
+        }
+      }
+    }
+
+    if (!best) {
+      best = coveringBlocks[s % coveringBlocks.length];
+    }
+
+    chosenCoreBlocks.push(best);
+    const bIdxs = best.idxs;
+    for (let p = 0; p < 6; p++) {
+      usedIdxCount[bIdxs[p]]++;
+    }
+    for (let p = 0; p < 4; p++) {
+      const ip = bIdxs[p];
+      for (let q = p + 1; q < 5; q++) {
+        const baseIdx = (ip * effectiveCoreV + bIdxs[q]) * effectiveCoreV;
+        for (let r = q + 1; r < 6; r++) {
+          cov3[baseIdx + bIdxs[r]] = 1;
+        }
+      }
+    }
+  }
+
+  const coldSet = new Set(cfg.coldOverduePool);
+  const chosenSignatures = new Set(
+    chosenCoreBlocks.map((b) => b.nums.join(","))
+  );
+
+  // For Mega 6/45 (slot5WideV > coreV), select Slot 5 via weighted sampling over wideWheelPool
+  let wideSlot5Nums: number[] | null = null;
+  if (slot5WideV > effectiveCoreV) {
+    const usedBalls = new Map<number, number>();
+    for (const blk of chosenCoreBlocks) {
+      for (const n of blk.nums) {
+        usedBalls.set(n, (usedBalls.get(n) ?? 0) + 1);
+      }
+    }
+    const wideWeights = wideWheelPool.map(
+      (b) => getBallConviction(b) + (coldSet.has(b) ? 45 : 0)
     );
+    const denom = pairWindowLen * expectedPairProb + 1;
+
+    let best5: number[] | null = null;
+    let best5Sc = -Infinity;
+    for (let att = 0; att < 400; att++) {
+      const cand = rng.sampleWeightedWithoutReplacement(
+        wideWheelPool,
+        wideWeights,
+        6
+      );
+      if (chosenSignatures.has(cand.join(","))) continue;
+      if (!passesCombinatorialSieve(cand, gameType, wheelSieveOpts)) continue;
+
+      let maxO = 0;
+      for (const blk of chosenCoreBlocks) {
+        let ov = 0;
+        for (let i = 0; i < 6; i++) {
+          if (blk.nums.includes(cand[i])) ov++;
+        }
+        if (ov > maxO) maxO = ov;
+      }
+      if (maxO > maxAllowedOverlap) continue;
+
+      let conv = 0;
+      let bal = 0;
+      let pLift = 0;
+      for (let i = 0; i < 6; i++) {
+        const n = cand[i];
+        conv += getBallConviction(n);
+        const u = usedBalls.get(n) ?? 0;
+        bal += u === 0 ? 35 : u === 1 ? 10 : -40;
+        for (let j = i + 1; j < 6; j++) {
+          pLift += (pairCoMatrix[n][cand[j]] + 1) / denom;
+        }
+      }
+      const sc = conv + bal + pLift * 14;
+      if (sc > best5Sc) {
+        best5Sc = sc;
+        best5 = cand;
+      }
+    }
+
+    if (!best5) {
+      for (let att = 0; att < 200; att++) {
+        const cand = rng.sampleWeightedWithoutReplacement(
+          wideWheelPool,
+          wideWeights,
+          6
+        );
+        if (!chosenSignatures.has(cand.join(","))) {
+          best5 = cand;
+          break;
+        }
+      }
+    }
+    wideSlot5Nums =
+      best5 ?? wideWheelPool.slice(0, 6).sort((a, b) => a - b);
+  }
+
+  // Assign the optimal 5 covering tickets uniquely to Strategies 1–5 by signature affinity
+  interface TicketCandidate {
+    nums: number[];
+    conv: number;
+    sum: number;
+    spread: number;
+    antiCount: number;
+    coldCount: number;
+    meanDiffAbs: number;
+  }
+
+  const remainingCore: TicketCandidate[] = chosenCoreBlocks.map((b) => {
+    const sum = b.nums.reduce((acc, v) => acc + v, 0);
+    return {
+      nums: b.nums,
+      conv: b.conv,
+      sum,
+      spread: b.nums[5] - b.nums[0],
+      antiCount: b.nums.filter((n) => n >= cfg.antiSplitCutoff).length,
+      coldCount: b.nums.filter((n) => coldSet.has(n)).length,
+      meanDiffAbs: Math.abs(sum - cfg.meanSum),
+    };
+  });
+
+  const pickBestRemaining = (
+    cmp: (a: TicketCandidate, b: TicketCandidate) => number
+  ): TicketCandidate => {
+    let bestIdx = 0;
+    for (let i = 1; i < remainingCore.length; i++) {
+      if (cmp(remainingCore[i], remainingCore[bestIdx]) > 0) {
+        bestIdx = i;
+      }
+    }
+    return remainingCore.splice(bestIdx, 1)[0];
   };
+
+  // 1. Slot 5 (ANTI_SPLIT_EV)
+  const slot5Nums = wideSlot5Nums
+    ? wideSlot5Nums
+    : pickBestRemaining(
+        (a, b) =>
+          a.antiCount - b.antiCount || a.sum - b.sum || a.conv - b.conv
+      ).nums;
+
+  // 2. Slot 2 (COLD_REBOUND)
+  const slot2Nums = pickBestRemaining(
+    (a, b) => a.coldCount - b.coldCount || a.conv - b.conv
+  ).nums;
+
+  // 3. Slot 3 (DELTA_SYSTEM)
+  const slot3Nums = pickBestRemaining(
+    (a, b) => a.spread - b.spread || a.conv - b.conv
+  ).nums;
+
+  // 4. Slot 4 (GOLDEN_EQUILIBRIUM)
+  const slot4Nums = pickBestRemaining(
+    (a, b) => b.meanDiffAbs - a.meanDiffAbs || a.conv - b.conv
+  ).nums;
+
+  // 5. Slot 1 (HOT_MOMENTUM)
+  const slot1Nums = remainingCore[0].nums;
+
+  const coveredTriplets = new Set<string>();
+  const registerTriplets = (nums: number[]) => {
+    const sc = [...nums].sort((a, b) => a - b);
+    for (let i = 0; i < 4; i++) {
+      for (let j = i + 1; j < 5; j++) {
+        for (let k = j + 1; k < 6; k++) {
+          coveredTriplets.add(`${sc[i]}-${sc[j]}-${sc[k]}`);
+        }
+      }
+    }
+  };
+  for (const tk of [slot1Nums, slot2Nums, slot3Nums, slot4Nums, slot5Nums]) {
+    registerTriplets(tk);
+  }
 
   const buildBallotObject = (
     slot: 1 | 2 | 3 | 4 | 5,
@@ -939,34 +1064,7 @@ export function generateDayForecast(
     nums: number[]
   ): GeneratedBallot => {
     const sc = [...nums].sort((a, b) => a - b);
-    const report = inspectCombinatorialSieve(sc, gameType, {
-      ...sieveOpts,
-      allowWideSum:
-        slot === 5 ||
-        ((highZoneSnapbackWheel ||
-          highZoneContinuationWheel ||
-          quadEmptyDecade4BreakoutWheel) &&
-          slot === 1),
-      allowSnapbackSum:
-        (highZoneSnapbackWheel || highZoneContinuationWheel) &&
-        (slot === 1 || slot === 2 || slot === 5),
-      allowUpperTailContinuation:
-        highZoneContinuationWheel && (slot === 1 || slot === 2 || slot === 5),
-      allowHighSkew:
-        slot === 5 ||
-        ((highZoneSnapbackWheel ||
-          highZoneContinuationWheel ||
-          quadEmptyDecade4BreakoutWheel) &&
-          (slot === 1 || slot === 2)),
-      allowSkewParity:
-        slot === 5 ||
-        ((upperTailBlowoutReboundWheel || quadEmptyDecade4BreakoutWheel) &&
-          (slot === 1 || slot === 2)),
-      allowMod10Triad:
-        (upperTailBlowoutReboundWheel || quadEmptyDecade4BreakoutWheel) &&
-        (slot === 1 || slot === 2 || slot === 5),
-      allowTwoConsecPairs: slot === 3 || slot === 5,
-    });
+    const report = inspectCombinatorialSieve(sc, gameType, wheelSieveOpts);
 
     return {
       slot,
@@ -992,375 +1090,52 @@ export function generateDayForecast(
     };
   };
 
-  // =========================================================================
-  // STRATEGY 1 (HOT_MOMENTUM): Concentrated Master Pool + Companion Affinity Anchor
-  // Evaluates 250+ weighted candidates from the self-learned Master Core & Hot Pool
-  // =========================================================================
-  let bestSlot1: number[] | null = null;
-  let bestSlot1Score = -Infinity;
-  const s1Pool = Array.from(
-    new Set([...masterCorePool, ...cfg.hotPool.slice(0, 18)])
+  ballots.push(
+    buildBallotObject(
+      1,
+      "HOT_MOMENTUM",
+      "Empirical-Bayes Core Covering Anchor",
+      "HOT MOMENTUM",
+      `Core L(${effectiveCoreV},6,3,${coreSlots}) anchor ticket maximizing Empirical-Bayes conviction, pairwise co-lift & Lag-1/2 carryover.`,
+      slot1Nums
+    ),
+    buildBallotObject(
+      2,
+      "COLD_REBOUND",
+      "Survival-Hazard Rebound + Core Wheel",
+      "COLD REBOUND",
+      "Covering block prioritizing peak Survival-Hazard rebound anchors inside the Core Covering Wheel.",
+      slot2Nums
+    ),
+    buildBallotObject(
+      3,
+      "DELTA_SYSTEM",
+      "Delta Harmonic Spacing + Core Wheel",
+      "DELTA SYSTEM",
+      `Widest-spread Covering Wheel block optimizing harmonic first-difference Delta spacing (target spread ≥ ${cfg.minDeltaSpread}).`,
+      slot3Nums
+    ),
+    buildBallotObject(
+      4,
+      "GOLDEN_EQUILIBRIUM",
+      "Golden Equilibrium + Core Wheel",
+      "GOLDEN EQUILIBRIUM",
+      `Equilibrium Covering Wheel block nearest μ = ${cfg.meanSum} and Gaussian core sum [${cfg.goldenCorridor[0]}, ${cfg.goldenCorridor[1]}].`,
+      slot4Nums
+    ),
+    buildBallotObject(
+      5,
+      "ANTI_SPLIT_EV",
+      wideSlot5Nums
+        ? "Anti-Split Wide-Wheel & Tail Hedge"
+        : "Anti-Split Upper-Zone Core Wheel",
+      "ANTI-SPLIT EV",
+      wideSlot5Nums
+        ? `Top-${wideWheelPool.length} Wide-Wheel selection emphasizing upper-range numbers (≥ ${cfg.antiSplitCutoff}) & overdue rebound coverage.`
+        : `Core Covering Wheel block emphasizing upper-range anti-split numbers (≥ ${cfg.antiSplitCutoff}).`,
+      slot5Nums
+    )
   );
-  const s1Weights = getWeightsForPool(s1Pool);
-
-  let validS1Count = 0;
-  const s1SieveOpts =
-    highZoneSnapbackWheel || highZoneContinuationWheel
-      ? {
-          ...sieveOpts,
-          allowWideSum: true,
-          allowSnapbackSum: true,
-          allowUpperTailContinuation: highZoneContinuationWheel,
-          allowHighSkew: true,
-        }
-      : upperTailBlowoutReboundWheel
-      ? {
-          ...sieveOpts,
-          allowSkewParity: true,
-          allowMod10Triad: true,
-        }
-      : quadEmptyDecade4BreakoutWheel
-      ? {
-          ...sieveOpts,
-          allowWideSum: true,
-          allowHighSkew: true,
-          allowSkewParity: true,
-          allowMod10Triad: true,
-        }
-      : sieveOpts;
-  for (let attempt = 0; attempt < 1800 && validS1Count < 180; attempt++) {
-    const cand =
-      (highZoneContinuationWheel ||
-        lowOddCarryoverEquilibriumWheel ||
-        upperTailBlowoutReboundWheel ||
-        quadEmptyDecade4BreakoutWheel) &&
-      attempt === 0
-        ? [...masterCorePool.slice(0, 6)].sort((a, b) => a - b)
-        : rng.sampleWeightedWithoutReplacement(s1Pool, s1Weights, 6);
-    const sig = cand.join(",");
-    if (
-      !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType, s1SieveOpts)
-    ) {
-      validS1Count++;
-      const rep = inspectCombinatorialSieve(cand, gameType, s1SieveOpts);
-      const score =
-        scoreCandidateWheelFit(cand) + rep.affinityLiftScore * 160;
-      if (score > bestSlot1Score) {
-        bestSlot1Score = score;
-        bestSlot1 = cand;
-      }
-    }
-  }
-  if (!bestSlot1) {
-    for (let attempt = 0; attempt < 2000; attempt++) {
-      const cand = rng.sampleWeightedWithoutReplacement(
-        allNums,
-        getWeightsForPool(allNums),
-        6
-      );
-      if (passesCombinatorialSieve(cand, gameType, sieveOpts)) {
-        bestSlot1 = cand;
-        break;
-      }
-    }
-  }
-  if (bestSlot1) {
-    usedSignatures.add(bestSlot1.join(","));
-    registerSelectedTicket(bestSlot1);
-    ballots.push(
-      buildBallotObject(
-        1,
-        "HOT_MOMENTUM",
-        "Self-Learned Master Core & Companion Wheel",
-        "HOT MOMENTUM",
-        "Concentrated sampling from the 14-Ball Walk-Forward Master Pool maximizing companion lift & Lag-1/2 carryover.",
-        bestSlot1
-      )
-    );
-  }
-
-  // =========================================================================
-  // STRATEGY 2 (COLD_REBOUND): Locks 2 High-Hazard Rebound balls + 4 Master Core Pivots
-  // Coordinated with t=3 Abbreviated Wheel (maxTicketOverlap <= 2)
-  // =========================================================================
-  let slot2Nums: number[] | null = null;
-  let bestSlot2Score = -Infinity;
-  const topColdPool = cfg.coldOverduePool.slice(0, 8);
-  const topColdWeights = topColdPool.map(
-    (b, idx) => getBallConviction(b) + (8 - idx) * 18
-  );
-
-  let validS2Count = 0;
-  const s2SieveOpts =
-    highZoneSnapbackWheel || highZoneContinuationWheel
-      ? {
-          ...sieveOpts,
-          allowSnapbackSum: true,
-          allowUpperTailContinuation: highZoneContinuationWheel,
-          allowHighSkew: true,
-        }
-      : sieveOpts;
-  for (let attempt = 0; attempt < 2400 && validS2Count < 160; attempt++) {
-    const coldPicks = rng.sampleWeightedWithoutReplacement(
-      topColdPool,
-      topColdWeights,
-      2
-    );
-    const remPool = allNums.filter((x) => !coldPicks.includes(x));
-    const remWeights = getWeightsForPool(remPool);
-    const pivots = rng.sampleWeightedWithoutReplacement(remPool, remWeights, 4);
-    const cand = [...coldPicks, ...pivots].sort((a, b) => a - b);
-    const sig = cand.join(",");
-    if (
-      !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType, s2SieveOpts)
-    ) {
-      validS2Count++;
-      const score = scoreCandidateWheelFit(cand);
-      if (score > bestSlot2Score) {
-        bestSlot2Score = score;
-        slot2Nums = cand;
-      }
-    }
-  }
-  if (slot2Nums) {
-    usedSignatures.add(slot2Nums.join(","));
-    registerSelectedTicket(slot2Nums);
-    ballots.push(
-      buildBallotObject(
-        2,
-        "COLD_REBOUND",
-        "Overdue Skip-Gap Rebound + Master Wheel",
-        "COLD REBOUND",
-        "Pairs 2 peak Survival-Hazard rebound numbers with 4 high-conviction Master Core anchors (t=3 wheeled).",
-        slot2Nums
-      )
-    );
-  }
-
-  // =========================================================================
-  // STRATEGY 3 (DELTA_SYSTEM): First-Difference Delta Chains Optimized for Conviction & t=3 Wheel
-  // Evaluates up to 160 valid delta chains to maximize Master Pool triplet coverage
-  // =========================================================================
-  let slot3Nums: number[] | null = null;
-  let bestSlot3Score = -Infinity;
-  let validS3Count = 0;
-
-  for (let attempt = 0; attempt < 3500 && validS3Count < 160; attempt++) {
-    const d1 = rng.nextInt(1, 7);
-    const stepDeltas = rng.shuffle([
-      rng.nextInt(1, 7),
-      rng.nextInt(2, 8),
-      rng.nextInt(5, 10),
-      rng.nextInt(6, cfg.maxDeltaStep),
-      rng.nextInt(6, cfg.maxDeltaStep),
-    ]);
-    const cand = [d1];
-    for (const s of stepDeltas) {
-      cand.push(cand[cand.length - 1] + s);
-    }
-    const spread = cand[5] - cand[0];
-    const sig = cand.join(",");
-    if (
-      cand[5] <= cfg.maxNum &&
-      spread >= cfg.minDeltaSpread &&
-      !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType, {
-        ...sieveOpts,
-        allowTwoConsecPairs: true,
-      })
-    ) {
-      validS3Count++;
-      const score = scoreCandidateWheelFit(cand);
-      if (score > bestSlot3Score) {
-        bestSlot3Score = score;
-        slot3Nums = cand;
-      }
-    }
-  }
-  if (!slot3Nums) {
-    for (let attempt = 0; attempt < 3000; attempt++) {
-      const cand = rng.sampleWeightedWithoutReplacement(
-        allNums,
-        getWeightsForPool(allNums),
-        6
-      );
-      const sig = cand.join(",");
-      if (
-        cand[5] - cand[0] >= cfg.minDeltaSpread &&
-        !usedSignatures.has(sig) &&
-        passesCombinatorialSieve(cand, gameType, {
-          ...sieveOpts,
-          allowTwoConsecPairs: true,
-        })
-      ) {
-        slot3Nums = cand;
-        break;
-      }
-    }
-  }
-  if (slot3Nums) {
-    usedSignatures.add(slot3Nums.join(","));
-    registerSelectedTicket(slot3Nums);
-    ballots.push(
-      buildBallotObject(
-        3,
-        "DELTA_SYSTEM",
-        "Delta Harmonic Spacing + t=3 Wheel",
-        "DELTA SYSTEM",
-        `Optimizes first-difference Delta chains (spread ≥ ${cfg.minDeltaSpread}) for maximum Master Pool conviction & triplet coverage.`,
-        slot3Nums
-      )
-    );
-  }
-
-  // =========================================================================
-  // STRATEGY 4 (GOLDEN_EQUILIBRIUM): 2O-4E / 3O-3E / 4O-2E & 3L-3H Weighted by Self-Learned Conviction
-  // Evaluates up to 160 Golden Corridor candidates across all 4 Golden Triad parity partitions
-  // =========================================================================
-  const lowOdd = allNums.filter((x) => x <= cfg.midPoint && x % 2 !== 0);
-  const lowEven = allNums.filter((x) => x <= cfg.midPoint && x % 2 === 0);
-  const highOdd = allNums.filter((x) => x > cfg.midPoint && x % 2 !== 0);
-  const highEven = allNums.filter((x) => x > cfg.midPoint && x % 2 === 0);
-
-  const wLowOdd = getWeightsForPool(lowOdd);
-  const wLowEven = getWeightsForPool(lowEven);
-  const wHighOdd = getWeightsForPool(highOdd);
-  const wHighEven = getWeightsForPool(highEven);
-
-  let slot4Nums: number[] | null = null;
-  let bestSlot4Score = -Infinity;
-  let validS4Count = 0;
-
-  for (let attempt = 0; attempt < 3500 && validS4Count < 160; attempt++) {
-    const mode = attempt % 4;
-    const cand =
-      mode === 0
-        ? [
-            ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 1),
-            ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 2),
-            ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 2),
-            ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 1),
-          ].sort((a, b) => a - b)
-        : mode === 1
-        ? [
-            ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 2),
-            ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 1),
-            ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 2),
-            ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 1),
-          ].sort((a, b) => a - b)
-        : mode === 2
-        ? [
-            ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 1),
-            ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 2),
-            ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 1),
-            ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 2),
-          ].sort((a, b) => a - b)
-        : [
-            ...rng.sampleWeightedWithoutReplacement(lowOdd, wLowOdd, 2),
-            ...rng.sampleWeightedWithoutReplacement(lowEven, wLowEven, 1),
-            ...rng.sampleWeightedWithoutReplacement(highOdd, wHighOdd, 1),
-            ...rng.sampleWeightedWithoutReplacement(highEven, wHighEven, 2),
-          ].sort((a, b) => a - b);
-
-    const sum = cand.reduce((acc, v) => acc + v, 0);
-    const sig = cand.join(",");
-    if (
-      sum >= cfg.goldenCorridor[0] &&
-      sum <= cfg.goldenCorridor[1] &&
-      !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType, sieveOpts)
-    ) {
-      validS4Count++;
-      const score = scoreCandidateWheelFit(cand);
-      if (score > bestSlot4Score) {
-        bestSlot4Score = score;
-        slot4Nums = cand;
-      }
-    }
-  }
-  if (slot4Nums) {
-    usedSignatures.add(slot4Nums.join(","));
-    registerSelectedTicket(slot4Nums);
-    ballots.push(
-      buildBallotObject(
-        4,
-        "GOLDEN_EQUILIBRIUM",
-        "Golden Equilibrium + Conviction Wheel",
-        "GOLDEN EQUILIBRIUM",
-        `Conviction-weighted 2O-4E / 3O-3E / 4O-2E Golden Triad parity, 3L-3H split, and Gaussian core sum [${cfg.goldenCorridor[0]}, ${cfg.goldenCorridor[1]}] with t=3 wheeling.`,
-        slot4Nums
-      )
-    );
-  }
-
-  // =========================================================================
-  // STRATEGY 5 (ANTI_SPLIT_EV): High-Zone Anti-Split Weighted by Self-Learned Conviction
-  // Prioritizes hot/repeating upper-range numbers (>= 27 for 6/45; >= 32 for 6/55, or > midPoint on High-Zone Snapback)
-  // =========================================================================
-  const upperAntiSplitPool = allNums.filter((x) =>
-    highZoneSnapbackWheel || highZoneContinuationWheel
-      ? x > cfg.midPoint
-      : x >= cfg.antiSplitCutoff
-  );
-  const lowerAnchorPool = allNums.filter((x) => x <= cfg.midPoint);
-  const wUpper = getWeightsForPool(upperAntiSplitPool);
-  const wLower = getWeightsForPool(lowerAnchorPool);
-
-  let slot5Nums: number[] | null = null;
-  let bestSlot5Score = -Infinity;
-  let validS5Count = 0;
-
-  for (let attempt = 0; attempt < 3500 && validS5Count < 160; attempt++) {
-    const highCountPick = attempt % 3 === 0 ? 5 : 4;
-    const lowCountPick = 6 - highCountPick;
-    const highPicks = rng.sampleWeightedWithoutReplacement(
-      upperAntiSplitPool,
-      wUpper,
-      highCountPick
-    );
-    const lowPicks = rng.sampleWeightedWithoutReplacement(
-      lowerAnchorPool,
-      wLower,
-      lowCountPick
-    );
-    const cand = [...lowPicks, ...highPicks].sort((a, b) => a - b);
-    const sig = cand.join(",");
-    if (
-      !usedSignatures.has(sig) &&
-      passesCombinatorialSieve(cand, gameType, {
-        ...sieveOpts,
-        allowWideSum: true,
-        allowSnapbackSum: highZoneSnapbackWheel || highZoneContinuationWheel,
-        allowUpperTailContinuation: highZoneContinuationWheel,
-        allowHighSkew: true,
-        allowSkewParity: true,
-        allowTwoConsecPairs: true,
-      })
-    ) {
-      validS5Count++;
-      const score = scoreCandidateWheelFit(cand);
-      if (score > bestSlot5Score) {
-        bestSlot5Score = score;
-        slot5Nums = cand;
-      }
-    }
-  }
-  if (slot5Nums) {
-    usedSignatures.add(slot5Nums.join(","));
-    registerSelectedTicket(slot5Nums);
-    ballots.push(
-      buildBallotObject(
-        5,
-        "ANTI_SPLIT_EV",
-        "Anti-Split High-Zone Conviction Wheel",
-        "ANTI-SPLIT EV",
-        `Conviction-weighted upper-range selection (≥ 4 balls ≥ ${cfg.antiSplitCutoff}) maximizing solo-jackpot EV & t=3 triplet coverage.`,
-        slot5Nums
-      )
-    );
-  }
 
   // Compute settled draw hit metrics if settledActualDraw is available
   let bestTicketMatchCount: number | undefined;

@@ -83,8 +83,12 @@ async function main() {
     }
 
     const baseUrl = `file:///${tmpDir.replace(/\\/g, "/")}`;
-    const { parseNDJsonDraws } = await import(`${baseUrl}/vietlottData.mjs`);
-    const { generateDayForecast } = await import(`${baseUrl}/quantEngine.mjs`);
+    const { buildDynamicGameConfigForDate, parseNDJsonDraws } = await import(
+      `${baseUrl}/vietlottData.mjs`
+    );
+    const { addDaysISO, generateDayForecast } = await import(
+      `${baseUrl}/quantEngine.mjs`
+    );
 
     const [pText, mText] = await Promise.all([
       fetchTextWithFallback(
@@ -98,7 +102,11 @@ async function main() {
     const powerDraws = parseNDJsonDraws(pText, "6/55", 600);
     const megaDraws = parseNDJsonDraws(mText, "6/45", 600);
 
-    const evaluateHoldout = (draws, gameType, startIdx, count) => {
+    const evaluateHoldoutMulti = (draws, gameType, startIdx, checkpoints) => {
+      const maxCount = Math.max(...checkpoints);
+      const checkpointSet = new Set(checkpoints);
+      const results = {};
+
       let masterHits = 0;
       let unionHits = 0;
       let unionSizeSum = 0;
@@ -109,8 +117,8 @@ async function main() {
       let t6 = 0;
       let prizeDraws = 0;
 
-      for (let i = startIdx; i < startIdx + count; i++) {
-        const d = draws[i];
+      for (let offset = 0; offset < maxCount; offset++) {
+        const d = draws[startIdx + offset];
         const f = generateDayForecast(d.date, 0, new Set(), {
           powerDraws,
           megaDraws,
@@ -146,71 +154,122 @@ async function main() {
         if (anyPrize) prizeDraws++;
         unionSizeSum += uSet.size;
         unionHits += d.numbers.filter((x) => uSet.has(x)).length;
+
+        const evaluated = offset + 1;
+        if (checkpointSet.has(evaluated)) {
+          results[evaluated] = {
+            gameType,
+            evaluatedDraws: evaluated,
+            avgMasterPoolHits: Number((masterHits / evaluated).toFixed(3)),
+            avgUnionBalls: Number((unionSizeSum / evaluated).toFixed(1)),
+            avgUnionHits: Number((unionHits / evaluated).toFixed(3)),
+            prizeDraws,
+            prizeDrawRatePct: Number(
+              ((prizeDraws / evaluated) * 100).toFixed(2)
+            ),
+            totalWinningTickets: t3 + t4 + t5 + jp2 + t6,
+            tiers: { t3, t4, t5, jp2, t6 },
+          };
+        }
       }
 
-      return {
-        gameType,
-        evaluatedDraws: count,
-        avgMasterPoolHits: Number((masterHits / count).toFixed(3)),
-        avgUnionBalls: Number((unionSizeSum / count).toFixed(1)),
-        avgUnionHits: Number((unionHits / count).toFixed(3)),
-        prizeDraws,
-        prizeDrawRatePct: Number(((prizeDraws / count) * 100).toFixed(2)),
-        totalWinningTickets: t3 + t4 + t5 + jp2 + t6,
-        tiers: { t3, t4, t5, jp2, t6 },
-      };
+      return results;
     };
 
-    const pRes = evaluateHoldout(powerDraws, "6/55", 15, 200);
-    const mRes = evaluateHoldout(megaDraws, "6/45", 15, 200);
+    const getNextDrawDate = (latestDateIso, isPower) => {
+      const targetDays = isPower
+        ? new Set(["Tuesday", "Thursday", "Saturday"])
+        : new Set(["Wednesday", "Friday", "Sunday"]);
+      for (let d = 1; d <= 7; d++) {
+        const cand = addDaysISO(latestDateIso, d);
+        const wk = new Date(`${cand}T12:00:00+07:00`).toLocaleDateString(
+          "en-US",
+          {
+            weekday: "long",
+            timeZone: "Asia/Ho_Chi_Minh",
+          }
+        );
+        if (targetDays.has(wk)) return cand;
+      }
+      return addDaysISO(latestDateIso, 2);
+    };
 
-    const fPowerNext = generateDayForecast("2026-11-26", 0, new Set(), {
+    const pMulti = evaluateHoldoutMulti(powerDraws, "6/55", 15, [200, 350]);
+    const mMulti = evaluateHoldoutMulti(megaDraws, "6/45", 15, [200, 350]);
+    const p200 = pMulti[200];
+    const m200 = mMulti[200];
+    const p350 = pMulti[350];
+    const m350 = mMulti[350];
+
+    const nextPowerDate = getNextDrawDate(powerDraws[0].date, true);
+    const nextMegaDate = getNextDrawDate(megaDraws[0].date, false);
+
+    const fPowerNext = generateDayForecast(nextPowerDate, 0, new Set(), {
       powerDraws,
       megaDraws,
     });
-    const fMegaNext = generateDayForecast("2026-11-27", 0, new Set(), {
+    const fMegaNext = generateDayForecast(nextMegaDate, 0, new Set(), {
       powerDraws,
       megaDraws,
+    });
+
+    const powerCfgNext = buildDynamicGameConfigForDate(
+      "6/55",
+      nextPowerDate,
+      powerDraws
+    );
+    const megaCfgNext = buildDynamicGameConfigForDate(
+      "6/45",
+      nextMegaDate,
+      megaDraws
+    );
+
+    const formatUpcoming = (f, cfg) => ({
+      targetDate: f.date,
+      weekday: f.weekday,
+      drawId: f.estimatedDrawId,
+      calibratedFromDrawId: cfg.latestDrawId,
+      calibratedFromDrawDate: cfg.latestDrawDate,
+      hotPool: cfg.hotPool,
+      hotWeights: cfg.hotWeights,
+      coldOverduePool: cfg.coldOverduePool,
+      masterCorePool: cfg.masterCorePool,
+      learnedWeights: cfg.learnedWeights,
+      wheelTripletsCovered: f.wheelTripletsCovered,
+      ballots: f.ballots.map((b) => ({
+        slot: b.slot,
+        badge: b.strategyBadge,
+        numbers: b.numbers,
+        sum: b.sum,
+        oddEven: b.oddEven,
+        lowHigh: b.lowHigh,
+      })),
     });
 
     console.log(
       JSON.stringify(
         {
-          benchmark: "400_DRAW_OUT_OF_SAMPLE_HOLDOUT",
-          power655Holdout200: pRes,
-          mega645Holdout200: mRes,
-          combined400: {
-            totalPrizeDraws: pRes.prizeDraws + mRes.prizeDraws,
-            totalWinningTickets:
-              pRes.totalWinningTickets + mRes.totalWinningTickets,
+          benchmark400: {
+            power655Holdout200: p200,
+            mega645Holdout200: m200,
+            combined400: {
+              totalPrizeDraws: p200.prizeDraws + m200.prizeDraws,
+              totalWinningTickets:
+                p200.totalWinningTickets + m200.totalWinningTickets,
+            },
+          },
+          benchmark700: {
+            power655Holdout350: p350,
+            mega645Holdout350: m350,
+            combined700: {
+              totalPrizeDraws: p350.prizeDraws + m350.prizeDraws,
+              totalWinningTickets:
+                p350.totalWinningTickets + m350.totalWinningTickets,
+            },
           },
           upcomingForecastPreview: {
-            power655_2026_11_26: {
-              drawId: fPowerNext.estimatedDrawId,
-              masterCorePool: fPowerNext.masterCorePool,
-              learnedWeights: fPowerNext.learnedWeights,
-              ballots: fPowerNext.ballots.map((b) => ({
-                slot: b.slot,
-                badge: b.strategyBadge,
-                numbers: b.numbers,
-                sum: b.sum,
-                oddEven: b.oddEven,
-                lowHigh: b.lowHigh,
-              })),
-            },
-            mega645_2026_11_27: {
-              drawId: fMegaNext.estimatedDrawId,
-              masterCorePool: fMegaNext.masterCorePool,
-              learnedWeights: fMegaNext.learnedWeights,
-              ballots: fMegaNext.ballots.map((b) => ({
-                slot: b.slot,
-                badge: b.strategyBadge,
-                numbers: b.numbers,
-                sum: b.sum,
-                oddEven: b.oddEven,
-                lowHigh: b.lowHigh,
-              })),
-            },
+            power655Next: formatUpcoming(fPowerNext, powerCfgNext),
+            mega645Next: formatUpcoming(fMegaNext, megaCfgNext),
           },
         },
         null,
