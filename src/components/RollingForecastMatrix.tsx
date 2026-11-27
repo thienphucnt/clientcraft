@@ -1,18 +1,16 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState, useSyncExternalStore } from "react";
 import {
   Calendar,
   Dices,
   RotateCcw,
   LayoutGrid,
   Columns,
-  Info,
   Check,
   Copy,
   Sparkles,
   CalendarOff,
-  ArrowRight,
   Filter,
 } from "lucide-react";
 import {
@@ -23,7 +21,6 @@ import {
 } from "@/lib/quantEngine";
 import { BallotCard } from "@/components/BallotCard";
 import {
-  formatVND,
   GAME_CONFIGS,
   getICTTelemetryClock,
 } from "@/lib/vietlottData";
@@ -39,6 +36,11 @@ interface RollingForecastMatrixProps {
   simulateDraw1413?: boolean;
   onToggleSimulateDraw1413?: () => void;
 }
+
+const emptySubscribe = () => () => {};
+const getClientTodayIso = () =>
+  getICTTelemetryClock(new Date()).isoDate || "2026-11-27";
+const getServerTodayIso = () => "2026-11-27";
 
 export function RollingForecastMatrix({
   schedule,
@@ -57,14 +59,11 @@ export function RollingForecastMatrix({
   const [selectedDayIso, setSelectedDayIso] = useState<string>(anchorDate);
   const [gameFilter, setGameFilter] = useState<"ALL" | "6/55" | "6/45">("ALL");
   const [copiedDayIso, setCopiedDayIso] = useState<string | null>(null);
-  const [liveTodayIso, setLiveTodayIso] = useState<string>("2026-11-27");
-
-  useEffect(() => {
-    const clk = getICTTelemetryClock(new Date());
-    if (clk.isoDate) {
-      setLiveTodayIso(clk.isoDate);
-    }
-  }, []);
+  const liveTodayIso = useSyncExternalStore(
+    emptySubscribe,
+    getClientTodayIso,
+    getServerTodayIso
+  );
 
   // Compute dynamic date presets relative to liveTodayIso
   const dynamicPresets = useMemo(() => {
@@ -549,7 +548,9 @@ export function RollingForecastMatrix({
                   const monDay = schedule.allHorizonDays.find(
                     (d) => d.isMondayRestDay
                   );
-                  onChangeAnchorDate(monDay ? monDay.date : "2026-10-19");
+                  onChangeAnchorDate(
+                    monDay ? monDay.date : dynamicPresets.nextMondayIso
+                  );
                 }}
                 className="font-mono font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
               >
@@ -560,9 +561,8 @@ export function RollingForecastMatrix({
 
           {/* 6 Active Draw Days Grid (Tuesday through Sunday = 30 Ballots) */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {filteredActiveSixDays.map((day, dayIdx) => {
+            {filteredActiveSixDays.map((day) => {
               const isPower = day.gameType === "6/55";
-              const cfg = GAME_CONFIGS[day.gameType as "6/55" | "6/45"];
               const isCopied = copiedDayIso === day.date;
 
               return (

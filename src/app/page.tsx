@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   ExecutiveHeader,
   JackpotTelemetryBanner,
@@ -32,23 +38,162 @@ import {
   Smartphone,
 } from "lucide-react";
 
+const emptySubscribe = () => () => {};
+const getClientTodayIso = () =>
+  getICTTelemetryClock(new Date()).isoDate || "2026-11-27";
+const getServerTodayIso = () => "2026-11-27";
+
+async function fetchLiveCloudSyncStatus(): Promise<SyncStatusResponse | null> {
+  try {
+    const res = await fetch("/api/sync-vietlott", { cache: "no-store" });
+    const contentType = res.headers.get("content-type") || "";
+    if (res.ok && contentType.includes("application/json")) {
+      return (await res.json()) as SyncStatusResponse;
+    }
+    throw new Error("API route unavailable on static host");
+  } catch {
+    try {
+      const [pRes, mRes, mnPowerRes, mnMegaRes] = await Promise.all([
+        fetch(GITHUB_NDJSON_URLS.power655, { cache: "no-store" }),
+        fetch(GITHUB_NDJSON_URLS.mega645, { cache: "no-store" }),
+        fetch(
+          `https://api.allorigins.win/raw?url=${encodeURIComponent(
+            GITHUB_NDJSON_URLS.minhNgocPower655
+          )}`
+        ).catch(() => null),
+        fetch(
+          `https://api.allorigins.win/raw?url=${encodeURIComponent(
+            GITHUB_NDJSON_URLS.minhNgocMega645
+          )}`
+        ).catch(() => null),
+      ]);
+
+      if (!pRes.ok || !mRes.ok) return null;
+
+      const [pText, mText, mnPowerHtml, mnMegaHtml] = await Promise.all([
+        pRes.text(),
+        mRes.text(),
+        mnPowerRes && mnPowerRes.ok ? mnPowerRes.text().catch(() => "") : "",
+        mnMegaRes && mnMegaRes.ok ? mnMegaRes.text().catch(() => "") : "",
+      ]);
+
+      const livePowerJp = mnPowerHtml
+        ? parseMinhNgocJackpots(mnPowerHtml, "6/55")
+        : undefined;
+      const liveMegaJp = mnMegaHtml
+        ? parseMinhNgocJackpots(mnMegaHtml, "6/45")
+        : undefined;
+
+      const pLines = pText
+        .split(/\r?\n/)
+        .filter((l) => l.trim().length > 0).length;
+      const mLines = mText
+        .split(/\r?\n/)
+        .filter((l) => l.trim().length > 0).length;
+
+      const parsedPower = parseNDJsonDraws(pText, "6/55", 2500, livePowerJp);
+      const parsedMega = parseNDJsonDraws(mText, "6/45", 2500, liveMegaJp);
+
+      const powerMap = new Map(parsedPower.map((d) => [d.id, d]));
+      for (const seedDraw of POWER_655_SEED_DRAWS) {
+        const existing = powerMap.get(seedDraw.id);
+        if (!existing) {
+          powerMap.set(seedDraw.id, seedDraw);
+        } else {
+          powerMap.set(seedDraw.id, {
+            ...existing,
+            jackpot1Vnd:
+              livePowerJp?.drawId === seedDraw.id && livePowerJp?.jackpot1Vnd
+                ? livePowerJp.jackpot1Vnd
+                : seedDraw.jackpot1Vnd,
+            jackpot2Vnd:
+              livePowerJp?.drawId === seedDraw.id && livePowerJp?.jackpot2Vnd
+                ? livePowerJp.jackpot2Vnd
+                : seedDraw.jackpot2Vnd,
+            jp1Winners:
+              livePowerJp?.drawId === seedDraw.id &&
+              livePowerJp?.jp1Winners !== undefined
+                ? livePowerJp.jp1Winners
+                : seedDraw.jp1Winners,
+            jp2Winners:
+              livePowerJp?.drawId === seedDraw.id &&
+              livePowerJp?.jp2Winners !== undefined
+                ? livePowerJp.jp2Winners
+                : seedDraw.jp2Winners,
+            isJackpotWon: seedDraw.isJackpotWon,
+          });
+        }
+      }
+      const mergedPower = Array.from(powerMap.values()).sort((a, b) =>
+        b.date.localeCompare(a.date)
+      );
+
+      const megaMap = new Map(parsedMega.map((d) => [d.id, d]));
+      for (const seedDraw of MEGA_645_SEED_DRAWS) {
+        const existing = megaMap.get(seedDraw.id);
+        if (!existing) {
+          megaMap.set(seedDraw.id, seedDraw);
+        } else {
+          megaMap.set(seedDraw.id, {
+            ...existing,
+            jackpot1Vnd:
+              liveMegaJp?.drawId === seedDraw.id && liveMegaJp?.jackpot1Vnd
+                ? liveMegaJp.jackpot1Vnd
+                : seedDraw.jackpot1Vnd,
+            jp1Winners:
+              liveMegaJp?.drawId === seedDraw.id &&
+              liveMegaJp?.jp1Winners !== undefined
+                ? liveMegaJp.jp1Winners
+                : seedDraw.jp1Winners,
+            isJackpotWon: seedDraw.isJackpotWon,
+          });
+        }
+      }
+      const mergedMega = Array.from(megaMap.values()).sort((a, b) =>
+        b.date.localeCompare(a.date)
+      );
+
+      const powerSeedFloor = Number(POWER_655_SEED_DRAWS[0]?.id ?? 1429);
+      const megaSeedFloor = Number(MEGA_645_SEED_DRAWS[0]?.id ?? 1594);
+
+      return {
+        tier: "TIER_1_LIVE_CLOUD_HYBRID",
+        syncedAt: new Date().toISOString(),
+        power655TotalDraws: Math.max(
+          powerSeedFloor,
+          pLines,
+          mergedPower.length
+        ),
+        mega645TotalDraws: Math.max(megaSeedFloor, mLines, mergedMega.length),
+        latestPowerDraw: mergedPower[0] || POWER_655_SEED_DRAWS[0],
+        latestMegaDraw: mergedMega[0] || MEGA_645_SEED_DRAWS[0],
+        powerDraws: mergedPower,
+        megaDraws: mergedMega,
+        sourceUrlPower: GITHUB_NDJSON_URLS.power655,
+        sourceUrlMega: GITHUB_NDJSON_URLS.mega645,
+        message: `Tier 1 Cloud NDJSON Sync Active (${mergedPower.length} Power 6/55 through #${mergedPower[0]?.id} & ${mergedMega.length} Mega 6/45 through #${mergedMega[0]?.id}).`,
+      };
+    } catch {
+      return null;
+    }
+  }
+}
+
 export default function VietlottQuantMatrixDashboard() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [anchorDate, setAnchorDate] = useState<string>("2026-11-27");
+  const liveTodayIso = useSyncExternalStore(
+    emptySubscribe,
+    getClientTodayIso,
+    getServerTodayIso
+  );
+  const [customAnchorDate, setCustomAnchorDate] = useState<string | null>(null);
+  const anchorDate = customAnchorDate ?? liveTodayIso;
   const [seedSalt, setSeedSalt] = useState<number>(0);
   const [simulateNextDraw, setSimulateNextDraw] = useState<boolean>(false);
   const [inspectedBallot, setInspectedBallot] =
     useState<GeneratedBallot | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-
-  // Sync live ICT calendar date on mount so the rolling window advances automatically day-by-day
-  useEffect(() => {
-    const liveClock = getICTTelemetryClock(new Date());
-    if (liveClock.isoDate) {
-      setAnchorDate(liveClock.isoDate);
-    }
-  }, []);
 
   // Sync theme with document.documentElement class
   useEffect(() => {
@@ -67,145 +212,9 @@ export default function VietlottQuantMatrixDashboard() {
   const triggerCloudSync = useCallback(async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch("/api/sync-vietlott", { cache: "no-store" });
-      const contentType = res.headers.get("content-type") || "";
-      if (res.ok && contentType.includes("application/json")) {
-        const data: SyncStatusResponse = await res.json();
-        setSyncStatus(data);
-        return;
-      }
-      throw new Error("API route unavailable on static host");
-    } catch {
-      try {
-        const [pRes, mRes, mnPowerRes, mnMegaRes] = await Promise.all([
-          fetch(GITHUB_NDJSON_URLS.power655, { cache: "no-store" }),
-          fetch(GITHUB_NDJSON_URLS.mega645, { cache: "no-store" }),
-          fetch(
-            `https://api.allorigins.win/raw?url=${encodeURIComponent(
-              GITHUB_NDJSON_URLS.minhNgocPower655
-            )}`
-          ).catch(() => null),
-          fetch(
-            `https://api.allorigins.win/raw?url=${encodeURIComponent(
-              GITHUB_NDJSON_URLS.minhNgocMega645
-            )}`
-          ).catch(() => null),
-        ]);
-
-        if (pRes.ok && mRes.ok) {
-          const [pText, mText, mnPowerHtml, mnMegaHtml] = await Promise.all([
-            pRes.text(),
-            mRes.text(),
-            mnPowerRes && mnPowerRes.ok
-              ? mnPowerRes.text().catch(() => "")
-              : "",
-            mnMegaRes && mnMegaRes.ok ? mnMegaRes.text().catch(() => "") : "",
-          ]);
-
-          const livePowerJp = mnPowerHtml
-            ? parseMinhNgocJackpots(mnPowerHtml, "6/55")
-            : undefined;
-          const liveMegaJp = mnMegaHtml
-            ? parseMinhNgocJackpots(mnMegaHtml, "6/45")
-            : undefined;
-
-          const pLines = pText
-            .split(/\r?\n/)
-            .filter((l) => l.trim().length > 0).length;
-          const mLines = mText
-            .split(/\r?\n/)
-            .filter((l) => l.trim().length > 0).length;
-
-          const parsedPower = parseNDJsonDraws(
-            pText,
-            "6/55",
-            2500,
-            livePowerJp
-          );
-          const parsedMega = parseNDJsonDraws(
-            mText,
-            "6/45",
-            2500,
-            liveMegaJp
-          );
-
-          const powerMap = new Map(parsedPower.map((d) => [d.id, d]));
-          for (const seedDraw of POWER_655_SEED_DRAWS) {
-            const existing = powerMap.get(seedDraw.id);
-            if (!existing) {
-              powerMap.set(seedDraw.id, seedDraw);
-            } else {
-              powerMap.set(seedDraw.id, {
-                ...existing,
-                jackpot1Vnd:
-                  livePowerJp?.drawId === seedDraw.id &&
-                  livePowerJp?.jackpot1Vnd
-                    ? livePowerJp.jackpot1Vnd
-                    : seedDraw.jackpot1Vnd,
-                jackpot2Vnd:
-                  livePowerJp?.drawId === seedDraw.id &&
-                  livePowerJp?.jackpot2Vnd
-                    ? livePowerJp.jackpot2Vnd
-                    : seedDraw.jackpot2Vnd,
-                jp1Winners:
-                  livePowerJp?.drawId === seedDraw.id &&
-                  livePowerJp?.jp1Winners !== undefined
-                    ? livePowerJp.jp1Winners
-                    : seedDraw.jp1Winners,
-                jp2Winners:
-                  livePowerJp?.drawId === seedDraw.id &&
-                  livePowerJp?.jp2Winners !== undefined
-                    ? livePowerJp.jp2Winners
-                    : seedDraw.jp2Winners,
-                isJackpotWon: seedDraw.isJackpotWon,
-              });
-            }
-          }
-          const mergedPower = Array.from(powerMap.values()).sort((a, b) =>
-            b.date.localeCompare(a.date)
-          );
-
-          const megaMap = new Map(parsedMega.map((d) => [d.id, d]));
-          for (const seedDraw of MEGA_645_SEED_DRAWS) {
-            const existing = megaMap.get(seedDraw.id);
-            if (!existing) {
-              megaMap.set(seedDraw.id, seedDraw);
-            } else {
-              megaMap.set(seedDraw.id, {
-                ...existing,
-                jackpot1Vnd:
-                  liveMegaJp?.drawId === seedDraw.id && liveMegaJp?.jackpot1Vnd
-                    ? liveMegaJp.jackpot1Vnd
-                    : seedDraw.jackpot1Vnd,
-                jp1Winners:
-                  liveMegaJp?.drawId === seedDraw.id &&
-                  liveMegaJp?.jp1Winners !== undefined
-                    ? liveMegaJp.jp1Winners
-                    : seedDraw.jp1Winners,
-                isJackpotWon: seedDraw.isJackpotWon,
-              });
-            }
-          }
-          const mergedMega = Array.from(megaMap.values()).sort((a, b) =>
-            b.date.localeCompare(a.date)
-          );
-
-          setSyncStatus({
-            tier: "TIER_1_LIVE_CLOUD_HYBRID",
-            syncedAt: new Date().toISOString(),
-            power655TotalDraws: Math.max(1416, pLines, mergedPower.length),
-            mega645TotalDraws: Math.max(1580, mLines, mergedMega.length),
-            latestPowerDraw: mergedPower[0] || POWER_655_SEED_DRAWS[0],
-            latestMegaDraw: mergedMega[0] || MEGA_645_SEED_DRAWS[0],
-            powerDraws: mergedPower,
-            megaDraws: mergedMega,
-            sourceUrlPower: GITHUB_NDJSON_URLS.power655,
-            sourceUrlMega: GITHUB_NDJSON_URLS.mega645,
-            message: `Tier 1 Cloud NDJSON Sync Active (${mergedPower.length} Power 6/55 through #${mergedPower[0]?.id} & ${mergedMega.length} Mega 6/45 through #${mergedMega[0]?.id}).`,
-          });
-        }
-      } catch {
-        // Offline Tier 2 seed active by default
+      const nextStatus = await fetchLiveCloudSyncStatus();
+      if (nextStatus) {
+        setSyncStatus(nextStatus);
       }
     } finally {
       setIsSyncing(false);
@@ -214,8 +223,26 @@ export default function VietlottQuantMatrixDashboard() {
 
   // Automatically sync Two-Tier Data Layer on initial mount
   useEffect(() => {
-    triggerCloudSync();
-  }, [triggerCloudSync]);
+    let cancelled = false;
+    (async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      setIsSyncing(true);
+      try {
+        const nextStatus = await fetchLiveCloudSyncStatus();
+        if (!cancelled && nextStatus) {
+          setSyncStatus(nextStatus);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsSyncing(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Compute live effective draw arrays (including optional "Sim Next Draw Settlement")
   const { effectivePowerDraws, effectiveMegaDraws } = useMemo(() => {
@@ -367,7 +394,7 @@ export default function VietlottQuantMatrixDashboard() {
           <RollingForecastMatrix
             schedule={rollingSchedule}
             anchorDate={anchorDate}
-            onChangeAnchorDate={setAnchorDate}
+            onChangeAnchorDate={setCustomAnchorDate}
             seedSalt={seedSalt}
             onReRollSeed={() => setSeedSalt((s) => s + 1)}
             onResetSeed={() => setSeedSalt(0)}

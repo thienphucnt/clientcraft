@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  GAME_CONFIGS,
   GITHUB_NDJSON_URLS,
   MEGA_645_SEED_DRAWS,
   parseMinhNgocJackpots,
@@ -7,6 +8,27 @@ import {
   POWER_655_SEED_DRAWS,
   SyncStatusResponse,
 } from "@/lib/vietlottData";
+
+function countConsecPairs(nums: number[]): {
+  consecPairs: number;
+  consecDetail?: string;
+} {
+  const sorted = [...nums].sort((a, b) => a - b);
+  let consecPairs = 0;
+  const consecList: string[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (sorted[i + 1] - sorted[i] === 1) {
+      consecPairs++;
+      consecList.push(
+        `${String(sorted[i]).padStart(2, "0")}-${String(sorted[i + 1]).padStart(2, "0")}`
+      );
+    }
+  }
+  return {
+    consecPairs,
+    consecDetail: consecList.length > 0 ? consecList.join(", ") : undefined,
+  };
+}
 
 export async function GET() {
   const syncedAt = new Date().toISOString();
@@ -93,6 +115,9 @@ export async function GET() {
       const sum = livePowerJp.numbers.reduce((acc, v) => acc + v, 0);
       const odds = livePowerJp.numbers.filter((n) => n % 2 !== 0).length;
       const lows = livePowerJp.numbers.filter((n) => n <= 27).length;
+      const { consecPairs, consecDetail } = countConsecPairs(
+        livePowerJp.numbers
+      );
       powerMap.set(livePowerJp.drawId, {
         id: livePowerJp.drawId,
         date: drawDate,
@@ -103,9 +128,14 @@ export async function GET() {
         sum,
         oddEven: `${odds}O-${6 - odds}E`,
         lowHigh: `${lows}L-${6 - lows}H`,
-        consecPairs: 0,
-        jackpot1Vnd: livePowerJp.jackpot1Vnd || 39_296_824_950,
-        jackpot2Vnd: livePowerJp.jackpot2Vnd || 5_270_244_750,
+        consecPairs,
+        consecDetail,
+        jackpot1Vnd:
+          livePowerJp.jackpot1Vnd || GAME_CONFIGS["6/55"].currentJackpot1Vnd,
+        jackpot2Vnd:
+          livePowerJp.jackpot2Vnd ||
+          GAME_CONFIGS["6/55"].currentJackpot2Vnd ||
+          3_000_000_000,
         jp1Winners: livePowerJp.jp1Winners ?? 0,
         jp2Winners: livePowerJp.jp2Winners ?? 0,
         isJackpotWon: (livePowerJp.jp1Winners ?? 0) > 0,
@@ -162,6 +192,9 @@ export async function GET() {
       const sum = liveMegaJp.numbers.reduce((acc, v) => acc + v, 0);
       const odds = liveMegaJp.numbers.filter((n) => n % 2 !== 0).length;
       const lows = liveMegaJp.numbers.filter((n) => n <= 22).length;
+      const { consecPairs, consecDetail } = countConsecPairs(
+        liveMegaJp.numbers
+      );
       megaMap.set(liveMegaJp.drawId, {
         id: liveMegaJp.drawId,
         date: drawDate,
@@ -171,8 +204,10 @@ export async function GET() {
         sum,
         oddEven: `${odds}O-${6 - odds}E`,
         lowHigh: `${lows}L-${6 - lows}H`,
-        consecPairs: 0,
-        jackpot1Vnd: liveMegaJp.jackpot1Vnd || 26_087_005_500,
+        consecPairs,
+        consecDetail,
+        jackpot1Vnd:
+          liveMegaJp.jackpot1Vnd || GAME_CONFIGS["6/45"].currentJackpot1Vnd,
         jp1Winners: liveMegaJp.jp1Winners ?? 0,
         isJackpotWon: (liveMegaJp.jp1Winners ?? 0) > 0,
       });
@@ -201,11 +236,22 @@ export async function GET() {
       b.date.localeCompare(a.date)
     );
 
+    const powerSeedFloor = Number(POWER_655_SEED_DRAWS[0]?.id ?? 1429);
+    const megaSeedFloor = Number(MEGA_645_SEED_DRAWS[0]?.id ?? 1594);
+
     const responsePayload: SyncStatusResponse = {
       tier: "TIER_1_LIVE_CLOUD_HYBRID",
       syncedAt,
-      power655TotalDraws: Math.max(1419, powerLinesCount, mergedPower.length),
-      mega645TotalDraws: Math.max(1584, megaLinesCount, mergedMega.length),
+      power655TotalDraws: Math.max(
+        powerSeedFloor,
+        powerLinesCount,
+        mergedPower.length
+      ),
+      mega645TotalDraws: Math.max(
+        megaSeedFloor,
+        megaLinesCount,
+        mergedMega.length
+      ),
       latestPowerDraw: mergedPower[0] || POWER_655_SEED_DRAWS[0],
       latestMegaDraw: mergedMega[0] || MEGA_645_SEED_DRAWS[0],
       powerDraws: mergedPower,
@@ -215,14 +261,17 @@ export async function GET() {
       message: `Tier 1 Live Cloud Sync Active (${mergedPower.length} Power 6/55 through #${mergedPower[0]?.id} & ${mergedMega.length} Mega 6/45 through #${mergedMega[0]?.id}).`,
     };
 
-    return NextResponse.json(responsePayload, { status: 200 });
+    return NextResponse.json(responsePayload, {
+      status: 200,
+      headers: { "Cache-Control": "no-store, max-age=0" },
+    });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Network offline";
     const fallbackPayload: SyncStatusResponse = {
       tier: "TIER_2_OFFLINE_SEED_2026",
       syncedAt,
-      power655TotalDraws: 1419,
-      mega645TotalDraws: 1584,
+      power655TotalDraws: Number(POWER_655_SEED_DRAWS[0]?.id ?? 1429),
+      mega645TotalDraws: Number(MEGA_645_SEED_DRAWS[0]?.id ?? 1594),
       latestPowerDraw: POWER_655_SEED_DRAWS[0],
       latestMegaDraw: MEGA_645_SEED_DRAWS[0],
       powerDraws: POWER_655_SEED_DRAWS,
@@ -232,6 +281,9 @@ export async function GET() {
       message: `Tier 2 Offline-First Empirical Seed Database Active (Fallback reason: ${errorMsg}).`,
     };
 
-    return NextResponse.json(fallbackPayload, { status: 200 });
+    return NextResponse.json(fallbackPayload, {
+      status: 200,
+      headers: { "Cache-Control": "no-store, max-age=0" },
+    });
   }
 }

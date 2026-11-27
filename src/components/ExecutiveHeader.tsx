@@ -46,11 +46,16 @@ export function ExecutiveHeader({
   );
 
   useEffect(() => {
-    setClock(getICTTelemetryClock(new Date()));
+    const initTimer = setTimeout(() => {
+      setClock(getICTTelemetryClock(new Date()));
+    }, 0);
     const timer = setInterval(() => {
       setClock(getICTTelemetryClock(new Date()));
     }, 1000);
-    return () => clearInterval(timer);
+    return () => {
+      clearTimeout(initTimer);
+      clearInterval(timer);
+    };
   }, []);
 
   const powerCfg = powerConfig ?? GAME_CONFIGS["6/55"];

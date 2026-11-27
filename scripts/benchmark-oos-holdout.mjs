@@ -102,7 +102,21 @@ async function main() {
     const powerDraws = parseNDJsonDraws(pText, "6/55", 600);
     const megaDraws = parseNDJsonDraws(mText, "6/45", 600);
 
+    const poissonUpperTailPValue = (observed, lambda) => {
+      if (observed <= 0) return 1;
+      let cdf = 0;
+      let term = Math.exp(-lambda);
+      cdf += term;
+      for (let k = 1; k < observed; k++) {
+        term *= lambda / k;
+        cdf += term;
+      }
+      return Math.max(0, Math.min(1, 1 - cdf));
+    };
+
     const evaluateHoldoutMulti = (draws, gameType, startIdx, checkpoints) => {
+      const is55 = gameType === "6/55";
+      const pWinPerTicket = is55 ? 0.01334 : 0.023842;
       const maxCount = Math.max(...checkpoints);
       const checkpointSet = new Set(checkpoints);
       const results = {};
@@ -137,7 +151,7 @@ async function main() {
           if (h === 6) {
             t6++;
             anyPrize = true;
-          } else if (h === 5 && bHit && gameType === "6/55") {
+          } else if (h === 5 && bHit && is55) {
             jp2++;
             anyPrize = true;
           } else if (h === 5) {
@@ -157,6 +171,21 @@ async function main() {
 
         const evaluated = offset + 1;
         if (checkpointSet.has(evaluated)) {
+          const totalWinningTickets = t3 + t4 + t5 + jp2 + t6;
+          const expectedRandomTickets = evaluated * 5 * pWinPerTicket;
+          const winningTicketLiftPct =
+            expectedRandomTickets > 0
+              ? ((totalWinningTickets - expectedRandomTickets) /
+                  expectedRandomTickets) *
+                100
+              : 0;
+          const estimatedPrizeReturnVnd =
+            t3 * (is55 ? 50_000 : 30_000) +
+            t4 * (is55 ? 500_000 : 300_000) +
+            t5 * (is55 ? 40_000_000 : 10_000_000) +
+            jp2 * 3_500_000_000 +
+            t6 * (is55 ? 50_000_000_000 : 20_000_000_000);
+
           results[evaluated] = {
             gameType,
             evaluatedDraws: evaluated,
@@ -167,7 +196,18 @@ async function main() {
             prizeDrawRatePct: Number(
               ((prizeDraws / evaluated) * 100).toFixed(2)
             ),
-            totalWinningTickets: t3 + t4 + t5 + jp2 + t6,
+            totalWinningTickets,
+            expectedRandomWinningTickets: Number(
+              expectedRandomTickets.toFixed(2)
+            ),
+            winningTicketLiftPct: Number(winningTicketLiftPct.toFixed(2)),
+            poissonUpperTailPValue: Number(
+              poissonUpperTailPValue(
+                totalWinningTickets,
+                expectedRandomTickets
+              ).toFixed(4)
+            ),
+            estimatedPrizeReturnVnd,
             tiers: { t3, t4, t5, jp2, t6 },
           };
         }
@@ -200,6 +240,37 @@ async function main() {
     const m200 = mMulti[200];
     const p350 = pMulti[350];
     const m350 = mMulti[350];
+
+    const buildCombinedStats = (pRes, mRes) => {
+      const totalWinningTickets =
+        pRes.totalWinningTickets + mRes.totalWinningTickets;
+      const expectedRandomWinningTickets = Number(
+        (
+          pRes.expectedRandomWinningTickets +
+          mRes.expectedRandomWinningTickets
+        ).toFixed(2)
+      );
+      return {
+        totalPrizeDraws: pRes.prizeDraws + mRes.prizeDraws,
+        totalWinningTickets,
+        expectedRandomWinningTickets,
+        winningTicketLiftPct: Number(
+          (
+            ((totalWinningTickets - expectedRandomWinningTickets) /
+              expectedRandomWinningTickets) *
+            100
+          ).toFixed(2)
+        ),
+        poissonUpperTailPValue: Number(
+          poissonUpperTailPValue(
+            totalWinningTickets,
+            expectedRandomWinningTickets
+          ).toFixed(4)
+        ),
+        estimatedPrizeReturnVnd:
+          pRes.estimatedPrizeReturnVnd + mRes.estimatedPrizeReturnVnd,
+      };
+    };
 
     const nextPowerDate = getNextDrawDate(powerDraws[0].date, true);
     const nextMegaDate = getNextDrawDate(megaDraws[0].date, false);
@@ -236,6 +307,12 @@ async function main() {
       masterCorePool: cfg.masterCorePool,
       learnedWeights: cfg.learnedWeights,
       wheelTripletsCovered: f.wheelTripletsCovered,
+      avgCrowdUniquenessScore: Number(
+        (
+          f.ballots.reduce((s, b) => s + b.crowdUniquenessScore, 0) /
+          Math.max(1, f.ballots.length)
+        ).toFixed(1)
+      ),
       ballots: f.ballots.map((b) => ({
         slot: b.slot,
         badge: b.strategyBadge,
@@ -243,6 +320,8 @@ async function main() {
         sum: b.sum,
         oddEven: b.oddEven,
         lowHigh: b.lowHigh,
+        crowdUniquenessScore: b.crowdUniquenessScore,
+        crowdUniquenessLabel: b.crowdUniquenessLabel,
       })),
     });
 
@@ -252,20 +331,12 @@ async function main() {
           benchmark400: {
             power655Holdout200: p200,
             mega645Holdout200: m200,
-            combined400: {
-              totalPrizeDraws: p200.prizeDraws + m200.prizeDraws,
-              totalWinningTickets:
-                p200.totalWinningTickets + m200.totalWinningTickets,
-            },
+            combined400: buildCombinedStats(p200, m200),
           },
           benchmark700: {
             power655Holdout350: p350,
             mega645Holdout350: m350,
-            combined700: {
-              totalPrizeDraws: p350.prizeDraws + m350.prizeDraws,
-              totalWinningTickets:
-                p350.totalWinningTickets + m350.totalWinningTickets,
-            },
+            combined700: buildCombinedStats(p350, m350),
           },
           upcomingForecastPreview: {
             power655Next: formatUpcoming(fPowerNext, powerCfgNext),

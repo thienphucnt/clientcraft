@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState, useSyncExternalStore } from "react";
 import {
   AreaChart,
   Area,
@@ -54,21 +54,23 @@ interface EmpiricalTelemetryChartsProps {
   megaConfig?: GameConfig;
 }
 
+const emptySubscribe = () => () => {};
+
 export function EmpiricalTelemetryCharts({
   powerDraws,
   megaDraws,
   powerConfig,
   megaConfig,
 }: EmpiricalTelemetryChartsProps) {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
   const [telemetryGame, setTelemetryGame] = useState<GameType>("6/55");
   const [selectedWindow, setSelectedWindow] =
     useState<WindowKey>("hitsAllTime");
   const [historyGame, setHistoryGame] = useState<GameType>("6/55");
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const pDraws =
     powerDraws && powerDraws.length > 0 ? powerDraws : POWER_655_SEED_DRAWS;

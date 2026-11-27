@@ -83,6 +83,8 @@ export interface GeneratedBallot {
   affinityLift: number;
   sievePassed: boolean;
   sieveGatesPassed: number;
+  crowdUniquenessScore: number;
+  crowdUniquenessLabel: "ELITE" | "HIGH" | "MODERATE" | "CROWDED";
   seedHash: string;
 }
 
@@ -231,6 +233,63 @@ export function computeDeltas(combo: number[]): number[] {
     deltas.push(sc[i] - sc[i - 1]);
   }
   return deltas;
+}
+
+export interface CrowdUniquenessReport {
+  score: number;
+  label: "ELITE" | "HIGH" | "MODERATE" | "CROWDED";
+  birthdayCount: number;
+  upperRangeCount: number;
+}
+
+/**
+ * Anti-Split Crowd Uniqueness Index (15–99) measuring how strongly a 6-number ticket avoids
+ * common human picking biases (calendar birthdays 1–31, multiples of 5, lucky 6/8/9 endings,
+ * and uniform arithmetic progressions) to minimize expected jackpot splitting.
+ */
+export function computeCrowdUniquenessScore(
+  combo: number[],
+  gameType: GameType
+): CrowdUniquenessReport {
+  const cfg = GAME_CONFIGS[gameType];
+  const sc = [...combo].sort((a, b) => a - b);
+  let score = 100;
+
+  const birthdayCount = sc.filter((n) => n <= 31).length;
+  const upperRangeCount = sc.filter((n) => n >= cfg.antiSplitCutoff).length;
+  const mult5 = sc.filter((n) => n % 5 === 0).length;
+  const luckyCount = sc.filter((n) => {
+    const d = n % 10;
+    return d === 6 || d === 8 || d === 9;
+  }).length;
+  const distinctStepDeltas = new Set(computeDeltas(sc).slice(1)).size;
+
+  score -=
+    gameType === "6/55"
+      ? Math.max(0, birthdayCount - 2) * 11
+      : Math.max(0, birthdayCount - 3) * 10;
+  if (mult5 >= 3) score -= (mult5 - 2) * 10;
+  if (luckyCount >= 4) score -= (luckyCount - 3) * 8;
+  if (distinctStepDeltas <= 2) score -= 18;
+  else if (distinctStepDeltas === 3) score -= 6;
+  score += Math.min(4, upperRangeCount) * 4;
+
+  const clampedScore = Math.max(15, Math.min(99, Math.round(score)));
+  const label: CrowdUniquenessReport["label"] =
+    clampedScore >= 82
+      ? "ELITE"
+      : clampedScore >= 68
+      ? "HIGH"
+      : clampedScore >= 52
+      ? "MODERATE"
+      : "CROWDED";
+
+  return {
+    score: clampedScore,
+    label,
+    birthdayCount,
+    upperRangeCount,
+  };
 }
 
 export interface CombinatorialSieveOptions {
@@ -617,7 +676,7 @@ export function generateDayForecast(
   // Check if targetDateStr itself already has a completed draw in the dataset (for retroactive backtest display)
   const settledActualDraw = sourceDraws.find((d) => d.date === targetDateStr);
 
-  // Calculate exact sequential draw ID from latest October 2026 draw date
+  // Calculate exact sequential draw ID from latest calibrated anchor draw date
   const latestAnchorDate = new Date(`${cfg.latestDrawDate}T12:00:00+07:00`);
   const diffDays = Math.round(
     (dateObj.getTime() - latestAnchorDate.getTime()) / (1000 * 3600 * 24)
@@ -658,15 +717,10 @@ export function generateDayForecast(
   const rng = new Mulberry32PRNG(seedInt);
   const ballots: GeneratedBallot[] = [];
 
-  const sieveOpts = {
-    customConfig: cfg,
-    customDraws: sourceDraws,
-  };
-
   // =========================================================================
-  // v4.0 DETERMINISTIC EXHAUSTIVE COVERING WHEEL L(coreV, 6, 3, m)
+  // v4.1 100% DETERMINISTIC EXHAUSTIVE COVERING WHEEL L(coreV, 6, 3, m)
   // Power 6/55: Exhaustive C(13,6)=1,716 L(13,6,3,5) across Top-13 Core Pool (maxOverlap <= 3)
-  // Mega 6/45:  Exhaustive C(15,6)=5,005 Slots 1-4 (maxOverlap <= 2) + Slot 5 Top-21 Wide Hedge
+  // Mega 6/45:  Exhaustive C(15,6)=5,005 Slots 1-4 (maxOverlap <= 2) + Exhaustive C(12,6)=924 Slot 5 Top-21 Hedge
   // =========================================================================
   const is55 = gameType === "6/55";
   const masterCorePool = cfg.masterCorePool ?? cfg.hotPool.slice(0, 14);
@@ -681,6 +735,18 @@ export function generateDayForecast(
   const priorSourceDraws = [...sourceDraws]
     .filter((d) => d.date < targetDateStr)
     .sort((a, b) => b.date.localeCompare(a.date));
+
+  const wheelSieveOpts: CombinatorialSieveOptions = {
+    customConfig: cfg,
+    customDraws: priorSourceDraws,
+    allowWideSum: true,
+    allowHighSkew: true,
+    allowAllHighOrLow: true,
+    allowSkewParity: true,
+    allowTwoConsecPairs: true,
+    allowThreeDecades: true,
+    allowMod10Triad: true,
+  };
 
   // Precompute O(1) Laplace-smoothed Pairwise Co-Occurrence Matrix over strictly prior 150 draws
   const pairWindow = priorSourceDraws.slice(0, 150);
@@ -703,17 +769,6 @@ export function generateDayForecast(
   const getBallConviction = (b: number): number => {
     const raw = cfg.allBallConvictionMap?.[b] ?? 80;
     return attenuatedNumbers.has(b) ? Math.round(raw * 0.88) : raw;
-  };
-
-  const wheelSieveOpts: CombinatorialSieveOptions = {
-    ...sieveOpts,
-    allowWideSum: true,
-    allowHighSkew: true,
-    allowAllHighOrLow: true,
-    allowSkewParity: true,
-    allowTwoConsecPairs: true,
-    allowThreeDecades: true,
-    allowMod10Triad: true,
   };
 
   const popcount = (x: number): number => {
@@ -853,7 +908,8 @@ export function generateDayForecast(
         else bal -= 120 * (u - 2);
       }
 
-      const sc = blk.conv + bal + blk.pLift * 14 + g3 * 22;
+      const coreJitter = seedSalt !== 0 ? rng.next() * 45 : 0;
+      const sc = blk.conv + bal + blk.pLift * 14 + g3 * 22 + coreJitter;
       if (sc > bestSc) {
         bestSc = sc;
         best = blk;
@@ -907,7 +963,7 @@ export function generateDayForecast(
     chosenCoreBlocks.map((b) => b.nums.join(","))
   );
 
-  // For Mega 6/45 (slot5WideV > coreV), select Slot 5 via weighted sampling over wideWheelPool
+  // For Mega 6/45 (slot5WideV > coreV), select Slot 5 via deterministic exhaustive C(12,6)=924 optimization
   let wideSlot5Nums: number[] | null = null;
   if (slot5WideV > effectiveCoreV) {
     const usedBalls = new Map<number, number>();
@@ -916,66 +972,97 @@ export function generateDayForecast(
         usedBalls.set(n, (usedBalls.get(n) ?? 0) + 1);
       }
     }
-    const wideWeights = wideWheelPool.map(
-      (b) => getBallConviction(b) + (coldSet.has(b) ? 45 : 0)
-    );
+    const s5PoolLen = Math.min(12, wideWheelPool.length);
+    const s5Cands = [...wideWheelPool]
+      .sort((a, b) => {
+        const ua = usedBalls.get(a) ?? 0;
+        const ub = usedBalls.get(b) ?? 0;
+        const sa =
+          getBallConviction(a) +
+          (coldSet.has(a) ? 45 : 0) +
+          (ua === 0 ? 55 : ua === 1 ? 10 : -80);
+        const sb =
+          getBallConviction(b) +
+          (coldSet.has(b) ? 45 : 0) +
+          (ub === 0 ? 55 : ub === 1 ? 10 : -80);
+        return sb - sa || a - b;
+      })
+      .slice(0, s5PoolLen);
     const denom = pairWindowLen * expectedPairProb + 1;
 
     let best5: number[] | null = null;
     let best5Sc = -Infinity;
-    for (let att = 0; att < 400; att++) {
-      const cand = rng.sampleWeightedWithoutReplacement(
-        wideWheelPool,
-        wideWeights,
-        6
-      );
-      if (chosenSignatures.has(cand.join(","))) continue;
-      if (!passesCombinatorialSieve(cand, gameType, wheelSieveOpts)) continue;
+    let bestMinOv5: number[] | null = null;
+    let bestMinOvVal = Infinity;
+    let bestMinOvSc = -Infinity;
 
-      let maxO = 0;
-      for (const blk of chosenCoreBlocks) {
-        let ov = 0;
-        for (let i = 0; i < 6; i++) {
-          if (blk.nums.includes(cand[i])) ov++;
-        }
-        if (ov > maxO) maxO = ov;
-      }
-      if (maxO > maxAllowedOverlap) continue;
+    for (let a = 0; a < s5PoolLen - 5; a++) {
+      for (let b = a + 1; b < s5PoolLen - 4; b++) {
+        for (let c = b + 1; c < s5PoolLen - 3; c++) {
+          for (let d = c + 1; d < s5PoolLen - 2; d++) {
+            for (let e = d + 1; e < s5PoolLen - 1; e++) {
+              for (let f = e + 1; f < s5PoolLen; f++) {
+                const cand = [
+                  s5Cands[a],
+                  s5Cands[b],
+                  s5Cands[c],
+                  s5Cands[d],
+                  s5Cands[e],
+                  s5Cands[f],
+                ].sort((x, y) => x - y);
+                if (chosenSignatures.has(cand.join(","))) continue;
+                if (!passesCombinatorialSieve(cand, gameType, wheelSieveOpts)) {
+                  continue;
+                }
 
-      let conv = 0;
-      let bal = 0;
-      let pLift = 0;
-      for (let i = 0; i < 6; i++) {
-        const n = cand[i];
-        conv += getBallConviction(n);
-        const u = usedBalls.get(n) ?? 0;
-        bal += u === 0 ? 35 : u === 1 ? 10 : -40;
-        for (let j = i + 1; j < 6; j++) {
-          pLift += (pairCoMatrix[n][cand[j]] + 1) / denom;
+                let maxO = 0;
+                for (const blk of chosenCoreBlocks) {
+                  let ov = 0;
+                  for (let i = 0; i < 6; i++) {
+                    if (blk.nums.includes(cand[i])) ov++;
+                  }
+                  if (ov > maxO) maxO = ov;
+                }
+
+                let conv = 0;
+                let bal = 0;
+                let pLift = 0;
+                for (let i = 0; i < 6; i++) {
+                  const n = cand[i];
+                  conv += getBallConviction(n);
+                  const u = usedBalls.get(n) ?? 0;
+                  bal += u === 0 ? 35 : u === 1 ? 10 : -40;
+                  for (let j = i + 1; j < 6; j++) {
+                    pLift += (pairCoMatrix[n][cand[j]] + 1) / denom;
+                  }
+                }
+                const seedJitter = seedSalt !== 0 ? rng.next() * 45 : 0;
+                const sc = conv + bal + pLift * 14 + seedJitter;
+
+                if (maxO <= maxAllowedOverlap) {
+                  if (sc > best5Sc) {
+                    best5Sc = sc;
+                    best5 = cand;
+                  }
+                } else if (
+                  maxO < bestMinOvVal ||
+                  (maxO === bestMinOvVal && sc > bestMinOvSc)
+                ) {
+                  bestMinOvVal = maxO;
+                  bestMinOvSc = sc;
+                  bestMinOv5 = cand;
+                }
+              }
+            }
+          }
         }
-      }
-      const sc = conv + bal + pLift * 14;
-      if (sc > best5Sc) {
-        best5Sc = sc;
-        best5 = cand;
       }
     }
 
-    if (!best5) {
-      for (let att = 0; att < 200; att++) {
-        const cand = rng.sampleWeightedWithoutReplacement(
-          wideWheelPool,
-          wideWeights,
-          6
-        );
-        if (!chosenSignatures.has(cand.join(","))) {
-          best5 = cand;
-          break;
-        }
-      }
-    }
     wideSlot5Nums =
-      best5 ?? wideWheelPool.slice(0, 6).sort((a, b) => a - b);
+      best5 ??
+      bestMinOv5 ??
+      s5Cands.slice(0, 6).sort((a, b) => a - b);
   }
 
   // Assign the optimal 5 covering tickets uniquely to Strategies 1–5 by signature affinity
@@ -1065,6 +1152,7 @@ export function generateDayForecast(
   ): GeneratedBallot => {
     const sc = [...nums].sort((a, b) => a - b);
     const report = inspectCombinatorialSieve(sc, gameType, wheelSieveOpts);
+    const uniqueness = computeCrowdUniquenessScore(sc, gameType);
 
     return {
       slot,
@@ -1086,6 +1174,8 @@ export function generateDayForecast(
       affinityLift: report.affinityLiftScore,
       sievePassed: report.passedAllGates,
       sieveGatesPassed: report.passedCount,
+      crowdUniquenessScore: uniqueness.score,
+      crowdUniquenessLabel: uniqueness.label,
       seedHash,
     };
   };

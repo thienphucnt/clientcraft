@@ -35,6 +35,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: TypeScript Verification & ESLint Gate
+        run: |
+          npm run typecheck
+          npm run lint
+
+      - name: Quantitative Regression Test Suite
+        run: npm test
+
       - name: Build Static Export for GitHub Pages (STATIC_EXPORT=1)
         run: |
           rm -rf .next

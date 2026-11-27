@@ -1,14 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   CheckCircle2,
   XCircle,
   Calculator,
   SearchCheck,
-  Sparkles,
   AlertTriangle,
-  Layers,
   Coins,
   Grid,
 } from "lucide-react";
@@ -51,8 +49,12 @@ export function SieveInspectorAndBaoCalculator({
     (powerConfig ?? GAME_CONFIGS["6/55"]).currentJackpot1Vnd
   );
 
-  // Sync when user clicks "Inspect" on any ballot card in the matrix
-  useEffect(() => {
+  // Sync during render when user clicks "Inspect" on any ballot card in the matrix
+  const [prevInspected, setPrevInspected] = useState<GeneratedBallot | null>(
+    null
+  );
+  if (inspectedBallot !== prevInspected) {
+    setPrevInspected(inspectedBallot);
     if (inspectedBallot) {
       setGameType(inspectedBallot.gameType);
       setNumbers([...inspectedBallot.numbers]);
@@ -61,7 +63,7 @@ export function SieveInspectorAndBaoCalculator({
       }
       setAllowWideSum(inspectedBallot.slot === 5);
     }
-  }, [inspectedBallot]);
+  }
 
   const powerCfg = powerConfig ?? GAME_CONFIGS["6/55"];
   const megaCfg = megaConfig ?? GAME_CONFIGS["6/45"];

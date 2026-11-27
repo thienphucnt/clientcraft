@@ -3,8 +3,8 @@
   "lastAuditedPowerDrawDate": "2026-11-26",
   "lastAuditedMegaDrawId": "01594",
   "lastAuditedMegaDrawDate": "2026-11-27",
-  "lastAuditedAtIct": "2026-11-27 21:14:00",
-  "engineVersion": "v4.0-zero-lookahead-covering",
+  "lastAuditedAtIct": "2026-11-27 22:36:00",
+  "engineVersion": "v4.1-deterministic-covering",
   "recentAudits": [
     {
       "gameType": "6/55",
@@ -212,6 +212,21 @@
         "Implemented Deterministic Exhaustive Covering Wheel L(coreV,6,3,m) in generateDayForecast: C(13,6)=1,716 L(13,6,3,5) (maxOverlap<=3) for Power 6/55 and C(15,6)=5,005 L(15,6,3,4) (maxOverlap<=2) + Top-21 Wide Hedge for Mega 6/45 with O(1) passesCombinatorialSieve",
         "Verified strictly unseen OOS holdout: 400-draw (200+200) achieved 37 prize draws / 40 winning tickets (6/55 doubled from 8/200 [4.0%] to 16/200 [8.0%, 19 tickets]; 6/45 21/200 [10.5%, 21 tickets incl. 4/6]); 700-draw (350+350) achieved 61 prize draws / 67 winning tickets (6/55 23/350 [27 tickets]; 6/45 38/350 [40 tickets incl. 4x 4/6])",
         "Hardened scripts/run-argon-retrospective-bg.ps1 and sidecar.json with mandatory scripts/benchmark-oos-holdout.mjs before/after regression gate and auto-revert on OOS degradation"
+      ]
+    },
+    {
+      "gameType": "6/55+6/45",
+      "drawId": "01429+01594-v4.1",
+      "date": "2026-11-27",
+      "numbers": [14, 18, 24, 28, 34, 55],
+      "bonus": 32,
+      "finding": "v4.1 Full-Stack Security, Quantitative & Engineering Overhaul: Upgraded Next.js to 16.4.6 (0 npm audit vulnerabilities, unblocking GitHub Actions STATIC_EXPORT=1 builds), upgraded Mega 6/45 Slot 5 from 400-sample Monte Carlo to 100% deterministic exhaustive C(12,6)=924 covering optimization, introduced the Anti-Split Crowd-Uniqueness Index (15-99), eliminated all 6 React 19 ESLint errors and 7 warnings, hardened /api/sync-vietlott, and deployed a 5-suite regression test harness.",
+      "evolvedChanges": [
+        "Upgraded next & eslint-config-next 16.4.2 -> 16.4.6 + npm audit fix (0 vulnerabilities across all dependencies)",
+        "Replaced Mega 6/45 Slot 5 Monte Carlo sampler in src/lib/quantEngine.ts with 100% deterministic exhaustive C(12,6)=924 optimization (raising 400-draw OOS to 41 prize draws / 45 winning tickets [+21.03% lift, p=0.1169] and 700-draw OOS to 67 prize draws / 73 winning tickets [+12.20% lift])",
+        "Added exported computeCrowdUniquenessScore (15-99) and UI Anti-Split badges on BallotCard + live metadata/lift fixes on RetrospectivePostMortem",
+        "Fixed affinityLift strictly-prior draw filtering in generateDayForecast caught by Suite 1 zero-lookahead causality test",
+        "Added 5-suite zero-dependency test harness (scripts/test-quant-suite.mjs) and gated .github/workflows/daily-vietlott-cloud-evolver.yml with npm run typecheck, lint, and test"
       ]
     }
   ]

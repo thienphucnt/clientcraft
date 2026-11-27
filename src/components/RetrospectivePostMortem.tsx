@@ -129,7 +129,12 @@ export function RetrospectivePostMortem({
               {ledger.avgMasterPoolHitsPerDraw} Hits / Draw
             </div>
             <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
-              Outperforms random baseline by +42% lift
+              {(() => {
+                const liftPct = Math.round(
+                  ((ledger.avgMasterPoolHitsPerDraw - 1.7) / 1.7) * 100
+                );
+                return `${liftPct >= 0 ? "+" : ""}${liftPct}% vs 1.70 random baseline`;
+              })()}
             </div>
           </div>
 
@@ -155,7 +160,7 @@ export function RetrospectivePostMortem({
               Sandwich Bridge + Empty-Decade
             </div>
             <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">
-              Captured 3/6 in #01419 &amp; 4/6 in #01583
+              Latest Audited: Power #{ledger.powerReports[0]?.drawId ?? "01429"} • Mega #{ledger.megaReports[0]?.drawId ?? "01594"}
             </div>
           </div>
 
@@ -165,10 +170,10 @@ export function RetrospectivePostMortem({
               <Cpu className="w-4 h-4 text-purple-500" />
             </div>
             <div className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
-              v4.0 Empirical-Bayes + Covering Wheel
+              v4.1 Deterministic Covering Wheel
             </div>
             <div className="text-[11px] text-purple-600 dark:text-purple-400 font-medium mt-0.5">
-              Auto-recalibrates daily at 19:00 ICT
+              Zero-Lookahead OOS-Gated Engine
             </div>
           </div>
         </div>

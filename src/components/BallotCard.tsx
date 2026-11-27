@@ -33,7 +33,7 @@ export function BallotCard({
     const formattedNums = ballot.numbers
       .map((n) => String(n).padStart(2, "0"))
       .join(" - ");
-    const text = `Vietlott ${cfg.name} (${ballot.targetDate}) | S${ballot.slot} ${ballot.strategyBadge}: ${formattedNums} | Sum: ${ballot.sum} (${ballot.oddEven}, ${ballot.lowHigh})`;
+    const text = `Vietlott ${cfg.name} (${ballot.targetDate}) | S${ballot.slot} ${ballot.strategyBadge}: ${formattedNums} | Sum: ${ballot.sum} (${ballot.oddEven}, ${ballot.lowHigh}) | Anti-Split: ${ballot.crowdUniquenessScore}`;
 
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(text);
@@ -230,6 +230,21 @@ export function BallotCard({
           {/* Decades & Spread */}
           <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono hidden md:inline-block">
             Decades: <strong>{ballot.distinctDecades}</strong> • Spread: <strong>{ballot.totalSpread}</strong>
+          </span>
+
+          {/* Anti-Split Crowd Uniqueness Index */}
+          <span
+            title="Anti-Split Crowd Uniqueness Index (0–99): reduces expected jackpot splitting with birthday/pattern pickers"
+            className={`px-2 py-0.5 rounded-md font-mono font-semibold border ${
+              ballot.crowdUniquenessLabel === "ELITE" ||
+              ballot.crowdUniquenessLabel === "HIGH"
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25"
+                : ballot.crowdUniquenessLabel === "MODERATE"
+                ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25"
+            }`}
+          >
+            Anti-Split: <strong>{ballot.crowdUniquenessScore}</strong>
           </span>
         </div>
 
