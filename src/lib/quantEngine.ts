@@ -717,19 +717,36 @@ export function generateDayForecast(
     low0Count === 0 &&
     lastDrawSum >= 250 &&
     low1Count <= 1;
+  const prev2DrawSum = prev2DrawNums.reduce((acc, v) => acc + v, 0);
+  const prev3DrawSum = prev3DrawNums.reduce((acc, v) => acc + v, 0);
+  const quadEmptyDecade4BreakoutWheel =
+    cfg.maxNum === 45 &&
+    lastDrawNums.length === 6 &&
+    prev2DrawNums.length === 6 &&
+    prev3DrawNums.length === 6 &&
+    prev4DrawNums.length === 6 &&
+    lastDrawSum <= 116 &&
+    prev2DrawSum <= 116 &&
+    prev3DrawSum <= 116 &&
+    !lastDrawNums.some((x) => x > 40) &&
+    !prev2DrawNums.some((x) => x > 40) &&
+    !prev3DrawNums.some((x) => x > 40) &&
+    !prev4DrawNums.some((x) => x > 40);
   const specialCatalyzedWheel =
     highZoneSnapbackWheel ||
     evenWaveLowOddReboundWheel ||
     highZoneContinuationWheel ||
     lowOddCarryoverEquilibriumWheel ||
-    upperTailBlowoutReboundWheel;
+    upperTailBlowoutReboundWheel ||
+    quadEmptyDecade4BreakoutWheel;
   const top7SnapbackSet = new Set(
     masterCorePool.slice(
       0,
       evenWaveLowOddReboundWheel ||
         lowOddCarryoverEquilibriumWheel ||
         highZoneContinuationWheel ||
-        upperTailBlowoutReboundWheel
+        upperTailBlowoutReboundWheel ||
+        quadEmptyDecade4BreakoutWheel
         ? 6
         : 7
     )
@@ -926,7 +943,10 @@ export function generateDayForecast(
       ...sieveOpts,
       allowWideSum:
         slot === 5 ||
-        ((highZoneSnapbackWheel || highZoneContinuationWheel) && slot === 1),
+        ((highZoneSnapbackWheel ||
+          highZoneContinuationWheel ||
+          quadEmptyDecade4BreakoutWheel) &&
+          slot === 1),
       allowSnapbackSum:
         (highZoneSnapbackWheel || highZoneContinuationWheel) &&
         (slot === 1 || slot === 2 || slot === 5),
@@ -934,12 +954,17 @@ export function generateDayForecast(
         highZoneContinuationWheel && (slot === 1 || slot === 2 || slot === 5),
       allowHighSkew:
         slot === 5 ||
-        ((highZoneSnapbackWheel || highZoneContinuationWheel) &&
+        ((highZoneSnapbackWheel ||
+          highZoneContinuationWheel ||
+          quadEmptyDecade4BreakoutWheel) &&
           (slot === 1 || slot === 2)),
       allowSkewParity:
-        slot === 5 || (upperTailBlowoutReboundWheel && (slot === 1 || slot === 2)),
+        slot === 5 ||
+        ((upperTailBlowoutReboundWheel || quadEmptyDecade4BreakoutWheel) &&
+          (slot === 1 || slot === 2)),
       allowMod10Triad:
-        upperTailBlowoutReboundWheel && (slot === 1 || slot === 2 || slot === 5),
+        (upperTailBlowoutReboundWheel || quadEmptyDecade4BreakoutWheel) &&
+        (slot === 1 || slot === 2 || slot === 5),
       allowTwoConsecPairs: slot === 3 || slot === 5,
     });
 
@@ -994,12 +1019,21 @@ export function generateDayForecast(
           allowSkewParity: true,
           allowMod10Triad: true,
         }
+      : quadEmptyDecade4BreakoutWheel
+      ? {
+          ...sieveOpts,
+          allowWideSum: true,
+          allowHighSkew: true,
+          allowSkewParity: true,
+          allowMod10Triad: true,
+        }
       : sieveOpts;
   for (let attempt = 0; attempt < 1800 && validS1Count < 180; attempt++) {
     const cand =
       (highZoneContinuationWheel ||
         lowOddCarryoverEquilibriumWheel ||
-        upperTailBlowoutReboundWheel) &&
+        upperTailBlowoutReboundWheel ||
+        quadEmptyDecade4BreakoutWheel) &&
       attempt === 0
         ? [...masterCorePool.slice(0, 6)].sort((a, b) => a - b)
         : rng.sampleWeightedWithoutReplacement(s1Pool, s1Weights, 6);

@@ -1034,6 +1034,97 @@ export function computeCausalSignalsForSlice(
     emptyDecadesCount0 >= 3 &&
     low1Count <= 1;
 
+  // Detect 3-Draw Low-Sum Compression & 4-Draw Empty-Decade 41-45 High-Odd Breakout Regime:
+  // When 3 consecutive 6/45 draws compressed sums to <= 116 (e.g. #01591 Sum=114, #01592 Sum=108, #01593 Sum=115)
+  // while Decade 41-45 (dec=4) remained empty across 4 consecutive draws (d0..d3 all <= 39)
+  // and Low-Odd anchors repeated back-to-back in d0 & d1, the next draw breaks out into High-Zone Odd & Decade 41-45.
+  const d1Sum = d1.reduce((acc, v) => acc + v, 0);
+  const d2Sum = d2.reduce((acc, v) => acc + v, 0);
+  const quadEmptyDecade4BreakoutRegime =
+    maxNum === 45 &&
+    d0.length === 6 &&
+    d1.length === 6 &&
+    d2.length === 6 &&
+    d3.length === 6 &&
+    d0Sum <= 116 &&
+    d1Sum <= 116 &&
+    d2Sum <= 116 &&
+    (decadeCount0.get(4) ?? 0) === 0 &&
+    (decadeCount1.get(4) ?? 0) === 0 &&
+    !d2.some((x) => x > 40) &&
+    !d3.some((x) => x > 40);
+
+  const d0PairEchoBreakoutMap = new Map<number, number>();
+  const d1PairEchoBreakoutMap = new Map<number, number>();
+  const d2PairEchoBreakoutMap = new Map<number, number>();
+  const d0UpperAnchorEchoBreakoutMap = new Map<number, number>();
+  const d0NewEvenEchoBreakoutMap = new Map<number, number>();
+  const d1D3EvenEchoBreakoutMap = new Map<number, number>();
+  if (quadEmptyDecade4BreakoutRegime) {
+    const d0UpperAnchors = d0.filter((x) => x > 30);
+    const d0NewLowEvens = d0.filter(
+      (x) => x <= midPoint && x % 2 === 0 && !set1.has(x)
+    );
+    const d1D3LowEvens = d1.filter(
+      (x) => x <= midPoint && x % 2 === 0 && set3.has(x)
+    );
+    for (const histDraw of historySlice.slice(2, 25)) {
+      const sh0 = histDraw.numbers.filter((x) => set0.has(x)).length;
+      const sh1 = histDraw.numbers.filter((x) => set1.has(x)).length;
+      const sh2 =
+        histDraw.id !== historySlice[2]?.id
+          ? histDraw.numbers.filter((x) => set2.has(x)).length
+          : 0;
+      const hasD0Upper = d0UpperAnchors.some((u) =>
+        histDraw.numbers.includes(u)
+      );
+      const hasD0NewEven = d0NewLowEvens.some((u) =>
+        histDraw.numbers.includes(u)
+      );
+      const hasD1D3Even = d1D3LowEvens.some((u) =>
+        histDraw.numbers.includes(u)
+      );
+      for (const x of histDraw.numbers) {
+        if (sh0 >= 2) {
+          d0PairEchoBreakoutMap.set(
+            x,
+            (d0PairEchoBreakoutMap.get(x) ?? 0) + 1
+          );
+        }
+        if (sh1 >= 2) {
+          d1PairEchoBreakoutMap.set(
+            x,
+            (d1PairEchoBreakoutMap.get(x) ?? 0) + 1
+          );
+        }
+        if (sh2 >= 2) {
+          d2PairEchoBreakoutMap.set(
+            x,
+            (d2PairEchoBreakoutMap.get(x) ?? 0) + 1
+          );
+        }
+        if (hasD0Upper) {
+          d0UpperAnchorEchoBreakoutMap.set(
+            x,
+            (d0UpperAnchorEchoBreakoutMap.get(x) ?? 0) + 1
+          );
+        }
+        if (hasD0NewEven) {
+          d0NewEvenEchoBreakoutMap.set(
+            x,
+            (d0NewEvenEchoBreakoutMap.get(x) ?? 0) + 1
+          );
+        }
+        if (hasD1D3Even) {
+          d1D3EvenEchoBreakoutMap.set(
+            x,
+            (d1D3EvenEchoBreakoutMap.get(x) ?? 0) + 1
+          );
+        }
+      }
+    }
+  }
+
   const d0AnchorEchoBlowoutMap = new Map<number, number>();
   const d0BonusCoEchoBlowoutSet = new Set<number>();
   const d0MinAnchorEchoBlowoutMap = new Map<number, number>();
@@ -1493,13 +1584,67 @@ export function computeCausalSignalsForSlice(
       isD0MinAnchorMultiEchoBridge ||
       isUpperBoundaryD0BonusCoEchoCarryover ||
       isDeepOverdueDecade3EchoBonus;
+    const isOverdueLowOddD3NeighborD2PairEcho =
+      quadEmptyDecade4BreakoutRegime &&
+      b <= midPoint &&
+      b % 2 !== 0 &&
+      !recentPool4WithBonus.has(b) &&
+      skipGap >= 10 &&
+      (set3.has(b + 1) || set3.has(b - 1)) &&
+      (d2PairEchoBreakoutMap.get(b) ?? 0) >= 1;
+    const isHighBoundaryConsecCarryoverPivot =
+      quadEmptyDecade4BreakoutRegime &&
+      b > midPoint &&
+      set0.has(b) &&
+      set1.has(b) &&
+      (set0.has(b + 1) || set0.has(b - 1)) &&
+      hits.w10 >= 4;
+    const isLag4HighOddD2NeighborDualEchoRebound =
+      quadEmptyDecade4BreakoutRegime &&
+      dec === 2 &&
+      b > midPoint &&
+      b % 2 !== 0 &&
+      !set0.has(b) &&
+      !set1.has(b) &&
+      set3.has(b) &&
+      (set2.has(b + 1) || set2.has(b - 1)) &&
+      (d0NewEvenEchoBreakoutMap.get(b) ?? 0) >= 1 &&
+      (d1D3EvenEchoBreakoutMap.get(b) ?? 0) >= 2;
+    const isDecade3PeakHazardD0UpperEchoRebound =
+      quadEmptyDecade4BreakoutRegime &&
+      dec === 3 &&
+      b % 2 !== 0 &&
+      !recentPool4WithBonus.has(b) &&
+      skipGap >= 15 &&
+      (d0UpperAnchorEchoBreakoutMap.get(b) ?? 0) >= 1;
+    const isUpperTailD1NeighborCarryoverAnchor =
+      quadEmptyDecade4BreakoutRegime &&
+      dec === 3 &&
+      set0.has(b) &&
+      (set1.has(b + 1) || set1.has(b - 1)) &&
+      hits.w20 >= 4 &&
+      (d0PairEchoBreakoutMap.get(b) ?? 0) >= 1;
+    const isQuadEmptyDecade4DualPairEchoRebound =
+      quadEmptyDecade4BreakoutRegime &&
+      dec === 4 &&
+      !recentPool4WithBonus.has(b) &&
+      (d0PairEchoBreakoutMap.get(b) ?? 0) >= 1 &&
+      (d1PairEchoBreakoutMap.get(b) ?? 0) >= 1;
+    const isQuadEmptyDecade4BreakoutCatalyzed =
+      isOverdueLowOddD3NeighborD2PairEcho ||
+      isHighBoundaryConsecCarryoverPivot ||
+      isLag4HighOddD2NeighborDualEchoRebound ||
+      isDecade3PeakHazardD0UpperEchoRebound ||
+      isUpperTailD1NeighborCarryoverAnchor ||
+      isQuadEmptyDecade4DualPairEchoRebound;
     const isRegimeCatalyzed =
       isEvenAftershockCatalyzed ||
       isHighSnapbackCatalyzed ||
       isEvenWaveLowOddReboundCatalyzed ||
       isHighContinuationCatalyzed ||
       isLowOddCarryoverEquilibriumCatalyzed ||
-      isUpperTailBlowoutReboundCatalyzed;
+      isUpperTailBlowoutReboundCatalyzed ||
+      isQuadEmptyDecade4BreakoutCatalyzed;
     const isDeepEchoCompanion =
       starveLowOddRegime &&
       !recentPool3WithBonus.has(b) &&
@@ -1575,7 +1720,11 @@ export function computeCausalSignalsForSlice(
       isSandwichAnchorLag4EvenReturn ||
       isUpperBoundaryD0BonusCoEchoCarryover ||
       isD0MinAnchorMultiEchoBridge ||
-      isEmptyDecadeD1NeighborHotEcho
+      isEmptyDecadeD1NeighborHotEcho ||
+      isHighBoundaryConsecCarryoverPivot ||
+      isUpperTailD1NeighborCarryoverAnchor ||
+      isLag4HighOddD2NeighborDualEchoRebound ||
+      isQuadEmptyDecade4DualPairEchoRebound
     ) {
       lagRepeat += 0.46;
     } else if (isRegimeCatalyzed) {
@@ -1605,7 +1754,8 @@ export function computeCausalSignalsForSlice(
         isEvenWaveLowOddReboundCatalyzed ||
         isHighContinuationCatalyzed ||
         isLowOddCarryoverEquilibriumCatalyzed ||
-        isUpperTailBlowoutReboundCatalyzed
+        isUpperTailBlowoutReboundCatalyzed ||
+        isQuadEmptyDecade4BreakoutCatalyzed
           ? 0.72
           : isEvenAftershockCatalyzed
           ? 0.46
@@ -1660,7 +1810,11 @@ export function computeCausalSignalsForSlice(
         isD0LowMidOddLag1Carryover ||
         isUpperBoundaryD0BonusCoEchoCarryover ||
         isEmptyDecadeD1NeighborHotEcho ||
-        isD0MinAnchorMultiEchoBridge
+        isD0MinAnchorMultiEchoBridge ||
+        isHighBoundaryConsecCarryoverPivot ||
+        isUpperTailD1NeighborCarryoverAnchor ||
+        isLag4HighOddD2NeighborDualEchoRebound ||
+        isQuadEmptyDecade4DualPairEchoRebound
           ? 0.76
           : isRegimeCatalyzed
           ? 0.32
@@ -1738,7 +1892,8 @@ export function computeCausalSignalsForSlice(
       isEmptyDecadeD2NeighborPeakHazard ||
       isEmptyDecadeD1NeighborHotEcho ||
       isD0MinAnchorMultiEchoBridge ||
-      isUpperBoundaryD0BonusCoEchoCarryover
+      isUpperBoundaryD0BonusCoEchoCarryover ||
+      isQuadEmptyDecade4BreakoutCatalyzed
     ) {
       decadeRebound = 0.94;
     } else if (isRegimeCatalyzed) {
@@ -1975,12 +2130,25 @@ export function buildDynamicGameConfigForDate(
     low0 === 0 &&
     newestSum >= 250 &&
     low1 <= 1;
+  const secondSum = secondDraw.numbers.reduce((acc, v) => acc + v, 0);
+  const thirdSum = thirdDraw.numbers.reduce((acc, v) => acc + v, 0);
+  const quadEmptyDecade4BreakoutNow =
+    maxNum === 45 &&
+    priorDraws.length >= 4 &&
+    newestSum <= 116 &&
+    secondSum <= 116 &&
+    thirdSum <= 116 &&
+    !newestDraw.numbers.some((x) => x > 40) &&
+    !secondDraw.numbers.some((x) => x > 40) &&
+    !thirdDraw.numbers.some((x) => x > 40) &&
+    !fourthDraw.numbers.some((x) => x > 40);
   const specialCatalyzedRegimeNow =
     highZoneSnapbackNow ||
     evenWaveLowOddReboundNow ||
     highZoneContinuationNow ||
     lowOddCarryoverEquilibriumNow ||
-    upperTailBlowoutReboundNow;
+    upperTailBlowoutReboundNow ||
+    quadEmptyDecade4BreakoutNow;
 
   const ballScores: Array<{
     ball: number;
