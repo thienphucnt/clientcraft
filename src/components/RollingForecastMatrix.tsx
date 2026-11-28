@@ -39,8 +39,8 @@ interface RollingForecastMatrixProps {
 
 const emptySubscribe = () => () => {};
 const getClientTodayIso = () =>
-  getICTTelemetryClock(new Date()).isoDate || "2026-11-27";
-const getServerTodayIso = () => "2026-11-27";
+  getICTTelemetryClock(new Date()).isoDate || "2026-11-28";
+const getServerTodayIso = () => "2026-11-28";
 
 export function RollingForecastMatrix({
   schedule,

@@ -1,9 +1,9 @@
 {
-  "lastAuditedPowerDrawId": "01429",
-  "lastAuditedPowerDrawDate": "2026-11-26",
+  "lastAuditedPowerDrawId": "01430",
+  "lastAuditedPowerDrawDate": "2026-11-28",
   "lastAuditedMegaDrawId": "01594",
   "lastAuditedMegaDrawDate": "2026-11-27",
-  "lastAuditedAtIct": "2026-11-27 22:36:00",
+  "lastAuditedAtIct": "2026-11-28 19:13:00",
   "engineVersion": "v4.1-deterministic-covering",
   "recentAudits": [
     {
@@ -227,6 +227,19 @@
         "Added exported computeCrowdUniquenessScore (15-99) and UI Anti-Split badges on BallotCard + live metadata/lift fixes on RetrospectivePostMortem",
         "Fixed affinityLift strictly-prior draw filtering in generateDayForecast caught by Suite 1 zero-lookahead causality test",
         "Added 5-suite zero-dependency test harness (scripts/test-quant-suite.mjs) and gated .github/workflows/daily-vietlott-cloud-evolver.yml with npm run typecheck, lint, and test"
+      ]
+    },
+    {
+      "gameType": "6/55",
+      "drawId": "01430",
+      "date": "2026-11-28",
+      "numbers": [4, 27, 37, 39, 42, 49],
+      "bonus": 23,
+      "finding": "Honest OOS-gated post-mortem (#01430: 04-27-37-39-42-49 + Bonus 23, Sum=198, 4O-2E, 2L-4H, JP1=54.69B VND [0 winners], JP2=3.32B VND [0 winners]): Pre-draw Master Pool and 5x6 L(13,6,3,5) tickets recorded 0/6 exact hits alongside 13 adjacent (±1) near-misses across the 5 sets (Slot 2 4xNear±1 [28->27, 36->37, 43->42, 50->49], Slot 1 3xNear±1, Slots 3-5 2xNear±1 each). Zero Lag-1/Lag-2 repeats carried over from #01428/#01429; instead 5/6 main winners + Bonus 23 shifted ±1 off prior anchors (28->27, 36->37, 40->39, 43->42, 50->49, 24->23) while 3/6 rebounded into #01429's two empty decades 01-10 (04 at deep skip=24) and 41-50 (42, 49) plus Lo-Gan rebounds 27 (skip=13) and 37 (skip=17). Tested wide-wheel Slot 5 (Top-21/24) and coreV={12,14} perturbations against the 400-draw and 700-draw OOS holdout gate: all candidates degraded Power 6/55 OOS from 16d/19t (+42.43% lift) to 10-12d/13-14t on 200 draws and 23d/27t to 13-19d/17-21t on 350 draws. Per strict anti-overfitting guardrails, preserved v4.1 engine code unchanged and synced #01430 empirical seed + 36-step damped Hedge recalibration (survivalRebound +0.34% -> 16.14%, lagRepeat -0.35% -> 18.14%, multiHorizon +0.11% -> 10.71%, decadeRebound +0.05% -> 6.68%, neighborMagnet +0.04% -> 12.92%).",
+      "evolvedChanges": [
+        "Synced Power 6/55 #01430 (2026-11-28, JP1 54.69B VND, JP2 3.32B VND, 0 winners) and post-#01430 buildDynamicGameConfigForDate calibration into src/data/empiricalSeed2026.ts",
+        "Updated UI & API fallback dates/draw floors to 2026-11-28 / #01430 across page.tsx, ExecutiveHeader.tsx, RollingForecastMatrix.tsx, RetrospectivePostMortem.tsx, and sync-vietlott/route.ts",
+        "Verified 400-draw (41d/45t, +21.03% lift) and 700-draw (67d/73t, +12.20% lift) OOS holdout gate; rejected wide-wheel/coreV perturbations that regressed OOS and retained clean v4.1 engine"
       ]
     }
   ]

@@ -236,7 +236,7 @@ export async function GET() {
       b.date.localeCompare(a.date)
     );
 
-    const powerSeedFloor = Number(POWER_655_SEED_DRAWS[0]?.id ?? 1429);
+    const powerSeedFloor = Number(POWER_655_SEED_DRAWS[0]?.id ?? 1430);
     const megaSeedFloor = Number(MEGA_645_SEED_DRAWS[0]?.id ?? 1594);
 
     const responsePayload: SyncStatusResponse = {
@@ -270,7 +270,7 @@ export async function GET() {
     const fallbackPayload: SyncStatusResponse = {
       tier: "TIER_2_OFFLINE_SEED_2026",
       syncedAt,
-      power655TotalDraws: Number(POWER_655_SEED_DRAWS[0]?.id ?? 1429),
+      power655TotalDraws: Number(POWER_655_SEED_DRAWS[0]?.id ?? 1430),
       mega645TotalDraws: Number(MEGA_645_SEED_DRAWS[0]?.id ?? 1594),
       latestPowerDraw: POWER_655_SEED_DRAWS[0],
       latestMegaDraw: MEGA_645_SEED_DRAWS[0],

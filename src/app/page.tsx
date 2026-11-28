@@ -40,8 +40,8 @@ import {
 
 const emptySubscribe = () => () => {};
 const getClientTodayIso = () =>
-  getICTTelemetryClock(new Date()).isoDate || "2026-11-27";
-const getServerTodayIso = () => "2026-11-27";
+  getICTTelemetryClock(new Date()).isoDate || "2026-11-28";
+const getServerTodayIso = () => "2026-11-28";
 
 async function fetchLiveCloudSyncStatus(): Promise<SyncStatusResponse | null> {
   try {
@@ -153,7 +153,7 @@ async function fetchLiveCloudSyncStatus(): Promise<SyncStatusResponse | null> {
         b.date.localeCompare(a.date)
       );
 
-      const powerSeedFloor = Number(POWER_655_SEED_DRAWS[0]?.id ?? 1429);
+      const powerSeedFloor = Number(POWER_655_SEED_DRAWS[0]?.id ?? 1430);
       const megaSeedFloor = Number(MEGA_645_SEED_DRAWS[0]?.id ?? 1594);
 
       return {

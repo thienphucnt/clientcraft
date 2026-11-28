@@ -160,7 +160,7 @@ export function RetrospectivePostMortem({
               Sandwich Bridge + Empty-Decade
             </div>
             <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">
-              Latest Audited: Power #{ledger.powerReports[0]?.drawId ?? "01429"} • Mega #{ledger.megaReports[0]?.drawId ?? "01594"}
+              Latest Audited: Power #{ledger.powerReports[0]?.drawId ?? "01430"} • Mega #{ledger.megaReports[0]?.drawId ?? "01594"}
             </div>
           </div>
 
